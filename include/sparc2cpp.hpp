@@ -19,8 +19,16 @@
 #include <cctype>
 #include <cstdlib>
 
+#ifndef SPARC_2_CPP
+#define SPARC_2_CPP
+
 namespace sp
 {
+	class PState;
+	class DomainSort;
+
+	std::string shellCmd(std::string cmd);
+
 	/**
 	 * \brief This method is for checking if a string ends with a given sub-string.
 	 * \param fullString The whole string.
@@ -29,6 +37,13 @@ namespace sp
 	*/
 	bool endsWith(std::string const &fullString,std::string const &ending);
 
+	bool startsWith(std::string const &fullString, std::string const &start);
+
+	std::string strBtwn(std::string const &fullString,int leftLimit, int rightLimit);
+
+	int countOcc(std::string const &fullString, std::string const &s);
+
+	std::vector<std::string> correctCommaSplit(std::vector<std::string> commaSplit);
 	/**
 	 * \brief This method is for segmenting an input string into a list of tokens separated by a delimiter sub-string.
 	 * \param fullString The whole input string.
@@ -44,63 +59,15 @@ namespace sp
 	*/
 	bool isInt(std::string const &inputString);
 
-	class DomainSort
-	{
-		private:
+	bool equal(PState const &ps1,PState const &ps2);
 
-			bool FileIsLoaded;
-			std::string StatusString;
-			std::string SourceFile;
-			std::vector<std::string> Sorts;
-			std::vector<std::vector<std::string>> SortElements;
-			std::vector<std::vector<std::vector<std::string>>> SortArguments;
-			std::vector<std::vector<int>> SubsortElemIndexes;
-			std::vector<std::vector<std::vector<int>>> SubsortArgsIndexes;
-			std::vector<std::string> Consts;
-			std::vector<std::string> ConstVals;
+	std::vector<PState> pstatesFromFile(std::string const &answerSetsFile);
 
-			/**
-			 * \brief This method verifies if SourceFile is a valid SPARC file to be loaded. Once this verification has been performed, it extracts the sorts and the sub-sort based hierarchy. This method does not make a full logic and sintactic revision to the source file, it assumes that the source file has been executed.
-			*/
-			void verifyAndLoad();
+	bool recursiveCheck(DomainSort const &ds, std::string const &input, int sortToCheck);
 
-			/**
-			 * \brief The method is for displaying the structure of sorts extracted from SourceFile.
-			*/
-			void sortDisplay();
-		public:
+	bool checkDef(DomainSort const &ds, std::string const &def, std::string const &input);
 
-			/**
-			 * \brief Default constructor.
-			*/
-			DomainSort();
-
-			/**
-			 * \brief Constructor that is initialized with a SPARC source file.
-			 * \param SourceFile SPARC source file to be loaded.
-			*/
-			DomainSort(std::string SourceFile);
-
-			/**
-			 * \brief This method is for loading a SPARC source file.
-			 * \param SourceFile SPARC source file to be loaded.
-			 * \return Returns true if a source file has been succesfully loaded.
-			*/
-			bool loadFile(std::string SourceFile);
-
-			/**
-			 * \return Returns true if a source file has been succesfully loaded.
-			*/
-			bool fileIsLoaded();
-
-			/**
-			 * \return Returns the status of the instance, i.e., whether a domain has been extracted, if a source file has  even been attempted to be loaded and so.
-			*/
-			std::string getStatus();
-
-			/**
-			 * \return Returns the path to a source file that has been succesfully loaded.
-			*/
-			std::string getFile();
-	};
+	PState subPstate(DomainSort const &ds, PState const &ps, std::vector<std::string> const &defs);
 }
+
+#endif

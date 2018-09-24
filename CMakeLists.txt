@@ -19,6 +19,8 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 #List of source files
 set(SOURCE
 ${CMAKE_SOURCE_DIR}/source/sparc2cpp.cpp
+${CMAKE_SOURCE_DIR}/source/DomainSort.cpp
+${CMAKE_SOURCE_DIR}/source/PState.cpp
 )
 
 #Directory where executables are to be found
