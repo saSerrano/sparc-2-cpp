@@ -1,6 +1,7 @@
 #include <DomainSort.hpp>
 #include <PState.hpp>
 #include <sparc2cpp.hpp>
+#include <Transition.hpp>
 
 void sp::DomainSort::verifyAndLoad()
 {
@@ -12,7 +13,6 @@ void sp::DomainSort::verifyAndLoad()
 	{
 		SourceFile = "";
 		FileIsLoaded = false;
-		StatusString = "Error: Could not open source file.";
 		
 		return;
 	}
@@ -82,7 +82,6 @@ void sp::DomainSort::verifyAndLoad()
 						//Only sorts defined in a single line will be acceppted
 						SourceFile = "";
 						FileIsLoaded = false;
-						StatusString = "Error: Only sorts defined in a single line will be accepted.";
 						return;
 					}
 				}
@@ -108,7 +107,6 @@ void sp::DomainSort::verifyAndLoad()
 			//Sorts must be composed of 2 parts separated by '='
 			SourceFile = "";
 			FileIsLoaded = false;
-			StatusString = "Error: Sort definitions must have a form of a two-sided equation.";
 			return;
 		}
 
@@ -246,7 +244,6 @@ void sp::DomainSort::verifyAndLoad()
 	SubsortElemIndexes = elemIndexes;
 	SubsortArgsIndexes = argsIndexes;
 	FileIsLoaded = true;
-	StatusString = "Succes: Source file has been successfully loaded.";
 
 	return;
 }
@@ -267,7 +264,6 @@ void sp::DomainSort::sortDisplay() const
 	}
 	std::cout << "Source file >> " + SourceFile << std::endl;
 	std::cout << "File is loaded >> " << FileIsLoaded << std::endl;
-	std::cout << "Status string >> " + StatusString << std::endl;
 }
 
 void sp::DomainSort::hierDisplay() const
@@ -291,7 +287,6 @@ void sp::DomainSort::hierDisplay() const
 sp::DomainSort::DomainSort()
 {
 	FileIsLoaded = false;
-	StatusString = "-- : No file has been loaded.";
 	SourceFile = "";
 }
 
@@ -314,11 +309,6 @@ bool sp::DomainSort::fileIsLoaded() const
 	return FileIsLoaded;
 }
 
-std::string sp::DomainSort::getStatus() const
-{
-	return StatusString;
-}
-
 std::string sp::DomainSort::getFile() const
 {
 	return SourceFile;
@@ -330,32 +320,18 @@ void sp::DomainSort::debug() const
 	hierDisplay();
 }
 
-std::vector<std::vector<sp::PState>> sp::DomainSort::generateStates(std::string const &rootGenSort, std::vector<std::string> const &subStateDefs)
+std::vector<std::vector<sp::PState>> sp::DomainSort::generateStates(std::string const &rootGenSort, std::vector<std::string> const &subStateDefs) const
 {
-/*
+	/*
 
-This method assumes that the SPARC file loaded to generate this DomainSort:
+	This method assumes that the SPARC file loaded to generate this DomainSort:
 
-- Has predicate: val(#fluent,#boolean,#step)
-- Has sort: #boolean = {true,false}
-- Has sort: #step = 0..max_step
-- Has sort: #defined_f = 
+	- Has predicate: val(#fluent,#boolean,#step)
+	- Has sort: #boolean = {true,false}
+	- Has sort: #step = 0..max_step
+	- Has sort: #defined_f = 
 
-+ 'rootGenSort' is a sort definition of the form #root_sort. Its where the method
-   will start to look for instances, where for each instance a defined fluent & a
-   generating rule will be added to the original SPARC file.
-
-+ 'subStateDefs' contains a list of definitions. For each definition, this method
-   will extract a sub-state (that satisfies the definition) from each state gene-
-   rated. That is why this method's output has the form of a vector of vectors of
-   states.
-
-$  return: The returned value is a vector of vectors of states. The returned vec-
-   tor holds one vector of states for each definition in 'subStateDefs'. It also
-   holds an extra vector of states that corresponds to the original vector of
-   states.
-
-*/
+	*/
 
 	//Verification of input parameters
 	if(!FileIsLoaded) return std::vector<std::vector<sp::PState>>();
@@ -396,19 +372,6 @@ $  return: The returned value is a vector of vectors of states. The returned vec
 			}
 		}
 	}
-//debug
-//std::cout << "gathElems size: " << gathElements.size() << std::endl;
-//std::cout << "gathArgs size: " << gathArguments.size() << std::endl;
-//for(unsigned int i = 0; i < gathElements.size(); i++)
-//{
-//std::cout << gathElements[i] << std::endl;
-//for(unsigned int j = 0; j < gathArguments[i].size(); j++)
-//{
-//std::cout << "\t" + gathArguments[i][j] << std::endl;
-//}
-//}
-//
-//return std::vector<std::vector<sp::PState>>();
 
 	//For each of the gathered elements that have arguments, generate:
 	//	- A defined fluent
@@ -467,14 +430,9 @@ $  return: The returned value is a vector of vectors of states. The returned vec
 
 	//Create a copy file from 'SourceFile'
 	std::vector<std::string> path_vec = sp::splitStr(SourceFile,"/");
-	int last_index = path_vec.size() - 1;//
-//
-//
-//
-
+	int last_index = path_vec.size() - 1;
 	std::vector<std::string> temp_vec = sp::splitStr(path_vec[last_index],".");
 	std::string cpFile = temp_vec[0] + "_DS.sp";
-	//sp::shellCmd("cp "+SourceFile+" "+cpFile);
 
 	//Add the defined fluents
 	std::ifstream inputFile;
@@ -548,7 +506,6 @@ $  return: The returned value is a vector of vectors of states. The returned vec
 	for(unsigned int i = 0; i < extPS.size(); i++) if(extPS[i].len() > max_len) max_len = extPS[i].len();
 	for(unsigned int i = 0; i < extPS.size(); i++) if(extPS[i].len() == max_len) largePS.push_back(extPS[i]);
 
-//-----------------------------------------------------------------------------------------------------------------
 	//From the p-states with the largest length, for each definition in 'subStateDefs' extract sub-pstates
 	//that satisfy such definition
 	std::vector<std::vector<sp::PState>> outputAnswerSets;
@@ -569,5 +526,115 @@ $  return: The returned value is a vector of vectors of states. The returned vec
 
 	return outputAnswerSets;
 }
+
+std::vector<sp::Transition> sp::DomainSort::generateTransitions(std::vector<sp::PState> const &setS0, std::string const &rootActionSort) const
+{
+/*
+
+This method assumes that the SPARC file loaded to generate this DomainSort:
+
+ - For each action, it has a defined fluent that defines the set of possible outcomes
+   an action can result in. This fluent is defined by the user, and must have the form,
+
+		action:
+			put(#block,#location)
+
+		defined fluent for possible outcome:
+			put_pos_outcome(#block,#location)
+
+*/
+
+	//Vector with hold the generated transitions
+	std::vector<sp::Transition> outputTrans;
+
+	//Initial checking on input parameters
+	if(!FileIsLoaded) return outputTrans;
+	if(setS0.size() == 0) return outputTrans;
+	if(rootActionSort.length() <= 1) return outputTrans;
+	if(!sp::startsWith(rootActionSort,"#")) return outputTrans;
+
+	//Get the index of the sort from which we will start looking for actions
+	int root_index = -1;
+	for(unsigned int i = 0; i < Sorts.size(); i++)
+	{
+		if(rootActionSort.substr(1,-1) == Sorts[i])
+		{
+			root_index = i;
+			break;
+		}
+	}
+	if(root_index == -1) return outputTrans;
+
+	//Gather those sorts of actions to be executed, as well as their arguments
+	std::vector<std::string> gathActions;
+	std::vector<std::vector<std::string>> gathActArgs;
+	for(int i = 0; i <= root_index; i++)
+	{
+		for(unsigned int j = 0; j < SortElements[i].size(); j++)
+		{
+			if(SubsortElemIndexes[i][j] == -1 && 
+			   sp::recursiveCheck((*this),SortElements[i][j],root_index))
+			{
+				gathActions.push_back(SortElements[i][j]);
+				gathActArgs.push_back(SortArguments[i][j]);
+			}
+		}
+	}
+
+	//For every gathered action, verify that the SPARC file has its corresponding
+	//defined fluent that defines the possible outcomes of the action
+	int action_deff_count = 0;
+	for(unsigned int i = 0; i < gathActions.size(); i++)
+	{
+		std::string action_deff_name(gathActions[i] + std::string("_pos_outcome"));
+		for(unsigned int j = 0; j < SortElements.size(); j++)
+		{
+			bool found_fluent = false;
+			for(unsigned int k = 0; k < SortElements[j].size(); k++)
+			{
+				if(SortElements[j][k] == action_deff_name)
+				{
+					std::string temp_ga_args("");
+					std::string temp_df_args("");
+					for(unsigned int l = 0; l < gathActArgs[i].size(); l++) temp_ga_args += gathActArgs[i][l];
+					for(unsigned int l = 0; l < SortArguments[j][k].size(); l++) temp_df_args += SortArguments[j][k][l];
+
+					if(temp_ga_args == temp_df_args)
+					{
+						found_fluent = true;
+						action_deff_count++;
+						break;
+					}
+				}
+			}
+			if(found_fluent) break;
+		}
+	}
+	if(action_deff_count != gathActions.size()) return outputTrans;
+
+//Generate the SPARC rules (choice rules) required to generate the transitions
+//one for each gathered action
+
+
+//debug
+//for(int i = 0; i < gathActions.size(); i++)
+//{
+//std::cout <<  gathActions[i] << std::endl;
+//	for(unsigned int j = 0; j < gathActArgs[i].size(); j++)
+//	{
+//std::cout << "\t" + gathActArgs[i][j] << std::endl;
+//	}
+//}
+
+return outputTrans;
+}
+
+
+
+
+
+
+
+
 
 

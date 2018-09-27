@@ -105,6 +105,18 @@ std::vector<std::string> sp::correctCommaSplit(std::vector<std::string> commaSpl
 	return commaSplit;
 }
 
+std::string sp::stripSpaces(std::string const &s)
+{
+	std::string output("");
+
+	for(int i = 0; i < s.length(); i++)
+	{
+		if(s.substr(i,1) != " ") output = output + s.substr(i,1);
+	}
+
+	return output;
+}
+
 std::vector<std::string> sp::splitStr(std::string const &fullString,std::string const &delimiter)
 {
 	//Verify that the delimiter is not an empty string
@@ -166,70 +178,6 @@ bool sp::isInt(std::string const &inputString)
 	}
 
 	return true;
-}
-
-bool sp::equal(sp::PState const &ps1,sp::PState const &ps2)
-{
-	//First make the comparison based on their 'PStateString' member
-	if(ps1.PStateString == ps2.PStateString) return true;
-
-	//Must have same amount of literals
-	if(ps1.PStateLength != ps2.PStateLength) return false;
-
-	//For each literal in 'ps1' is must also be in 'ps2'
-	std::vector<int> matchedLitIndexes;
-	for(int i = 0; i < ps1.PStateLength; i++)
-	{
-		std::vector<int>::iterator it;
-		for(int j = 0; j < ps2.PStateLength ; j++)
-		{
-			//Avoid checking on literals of 'ps2' that were already matched
-			it = std::find(matchedLitIndexes.begin(),matchedLitIndexes.end(),j);
-			if(it != matchedLitIndexes.end()) continue;
-
-			//Both literals have same name
-			if(ps1.LitNames[i] != ps2.LitNames[j]) continue;
-
-			//Both literals must have same amount of arguments
-			if(ps1.LitArgs[i].size() != ps2.LitArgs[j].size()) continue;
-
-			bool allArgMatch = true;
-			for(unsigned int k = 0; k < ps1.LitArgs[i].size(); k++)
-			{
-				//Verify that the literals' argument correspond and have the same amount of sub-arguments
-				if((ps1.LitArgs[i][k] != ps2.LitArgs[j][k]) ||
-				   (ps1.LitArgArgs[i][k].size() != ps2.LitArgArgs[j][k].size()))
-				{
-					allArgMatch = false;
-					break;
-				}
-
-				//Verify that the sub-argguments match between the literals' arguments
-				for(unsigned int l = 0; l < ps1.LitArgArgs[i][k].size(); l++)
-				{
-					if(ps1.LitArgArgs[i][k][l] != ps2.LitArgArgs[j][k][l])
-					{
-						allArgMatch = false;
-						break;
-					}
-				}
-
-				if(!allArgMatch) break;
-			}
-
-			//The i-th literal of 'ps1' matches the j-th literal of 'ps2'
-			if(allArgMatch)
-			{
-				//Store index j to avoid checkin on 'ps2' that have already matched a literal of 'ps1'
-				matchedLitIndexes.push_back(j);
-				break;
-			}
-		}
-	}
-
-	//Return true if the amount of matched literals equals the total amount of literals
-	if(matchedLitIndexes.size() == ps1.PStateLength) return true;
-	else return false;
 }
 
 std::vector<sp::PState> sp::pstatesFromFile(std::string const &answerSetsFile)
@@ -419,23 +367,26 @@ sp::PState sp::subPstate(sp::DomainSort const &ds, sp::PState const &ps, std::ve
 						//Check the k-th argument
 						if(sp::checkDef(ds,def_args[k],ps.LitArgs[j][k]))
 						{
-							if(def_arg_args[k].size() != ps.LitArgArgs[j][k].size())
+							if(def_arg_args[k].size() > 0)
 							{
-								allArgsCheck = false;
-								break;
-							}
-
-							//Check each sub-arg of the k-th argument
-							for(unsigned int l = 0; l < ps.LitArgArgs[j][k].size(); l++)
-							{
-								if(!sp::checkDef(ds,def_arg_args[k][l],ps.LitArgArgs[j][k][l]))
+								if(def_arg_args[k].size() != ps.LitArgArgs[j][k].size())
 								{
 									allArgsCheck = false;
 									break;
 								}
-							}
 
-							if(!allArgsCheck) break;
+								//Check each sub-arg of the k-th argument
+								for(unsigned int l = 0; l < ps.LitArgArgs[j][k].size(); l++)
+								{
+									if(!sp::checkDef(ds,def_arg_args[k][l],ps.LitArgArgs[j][k][l]))
+									{
+										allArgsCheck = false;
+										break;
+									}
+								}
+
+								if(!allArgsCheck) break;
+							}
 						}
 						else
 						{

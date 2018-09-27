@@ -140,3 +140,119 @@ void sp::PState::debug() const
 	std::cout << "PStateString: " << PStateString << std::endl;
 	pstateDisplay();
 }
+
+bool sp::PState::equals(sp::PState const &ps2) const
+{
+	//First make the comparison based on their 'PStateString' member
+	if(this->PStateString == ps2.PStateString) return true;
+
+	//Must have same amount of literals
+	if(this->PStateLength != ps2.PStateLength) return false;
+
+	//For each literal in 'this-> is must also be in 'ps2'
+	std::vector<int> matchedLitIndexes;
+	for(int i = 0; i < this->PStateLength; i++)
+	{
+		std::vector<int>::iterator it;
+		for(int j = 0; j < ps2.PStateLength ; j++)
+		{
+			//Avoid checking on literals of 'ps2' that were already matched
+			it = std::find(matchedLitIndexes.begin(),matchedLitIndexes.end(),j);
+			if(it != matchedLitIndexes.end()) continue;
+
+			//Both literals have same name
+			if(this->LitNames[i] != ps2.LitNames[j]) continue;
+
+			//Both literals must have same amount of arguments
+			if(this->LitArgs[i].size() != ps2.LitArgs[j].size()) continue;
+
+			bool allArgMatch = true;
+			for(unsigned int k = 0; k < this->LitArgs[i].size(); k++)
+			{
+				//Verify that the literals' argument correspond and have the same amount of sub-arguments
+				if((this->LitArgs[i][k] != ps2.LitArgs[j][k]) ||
+				   (this->LitArgArgs[i][k].size() != ps2.LitArgArgs[j][k].size()))
+				{
+					allArgMatch = false;
+					break;
+				}
+
+				//Verify that the sub-argguments match between the literals' arguments
+				for(unsigned int l = 0; l < this->LitArgArgs[i][k].size(); l++)
+				{
+					if(this->LitArgArgs[i][k][l] != ps2.LitArgArgs[j][k][l])
+					{
+						allArgMatch = false;
+						break;
+					}
+				}
+
+				if(!allArgMatch) break;
+			}
+
+			//The i-th literal of 'this-> matches the j-th literal of 'ps2'
+			if(allArgMatch)
+			{
+				//Store index j to avoid checkin on 'ps2' that have already matched a literal of 'this->
+				matchedLitIndexes.push_back(j);
+				break;
+			}
+		}
+	}
+
+	//Return true if the amount of matched literals equals the total amount of literals
+	if(matchedLitIndexes.size() == this->PStateLength) return true;
+	else return false;
+}
+
+bool sp::PState::contains(sp::PState const &ps2) const
+{
+	//Every state conatins the empty state
+	if(ps2.PStateString == "{}") return true;
+
+	//Cannot contain a state that has more literals
+	if(ps2.PStateLength > this->PStateLength) return false;
+
+	//For each literal in 'ps2' check if its conatained in 'this'
+	int literals_found = 0;
+	for(unsigned int i = 0; i < ps2.LitNames.size(); i++)
+	{
+		bool literal_is_contained = false;
+		for(unsigned int j = 0; j < this->LitNames.size(); j++)
+		{
+			bool found_literal = true;
+			if(ps2.LitNames[i] == this->LitNames[j] && ps2.LitArgs[i].size() == this->LitArgs[j].size())
+			{
+				for(unsigned int k = 0; k < ps2.LitArgs[i].size(); k++)
+				{
+					if(ps2.LitArgs[i][k] == this->LitArgs[j][k] && 
+					   ps2.LitArgArgs[i][k].size() == this->LitArgArgs[j][k].size())
+					{
+						for(unsigned int l = 0; l < ps2.LitArgArgs[i][k].size(); l++)
+						{
+							if(ps2.LitArgArgs[i][k][l] != this->LitArgArgs[j][k][l])
+							{
+								found_literal = false;
+								break;
+							}
+						}
+
+						if(!found_literal) break;
+					}
+					else found_literal = false;
+				}
+			}
+			else found_literal = false;
+
+			if(found_literal)
+			{
+				literal_is_contained = true;
+				break;
+			}
+		}
+
+		if(literal_is_contained) literals_found++;
+	}
+
+	return (literals_found == ps2.PStateLength);
+}
