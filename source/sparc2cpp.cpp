@@ -117,6 +117,18 @@ std::string sp::stripSpaces(std::string const &s)
 	return output;
 }
 
+std::string sp::stripTabs(std::string const &s)
+{
+	std::string output("");
+
+	for(int i = 0; i < s.length(); i++)
+	{
+		if(s.substr(i,1) != "\t") output = output + s.substr(i,1);
+	}
+
+	return output;
+}
+
 std::vector<std::string> sp::splitStr(std::string const &fullString,std::string const &delimiter)
 {
 	//Verify that the delimiter is not an empty string

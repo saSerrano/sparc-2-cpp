@@ -27,6 +27,7 @@ namespace sp
 {
 	class PState;
 	class Transition;
+	class Action;
 	class DomainSort
 	{
 		private:
@@ -41,8 +42,17 @@ namespace sp
 			std::vector<std::string> Consts;
 			std::vector<std::string> ConstVals;
 
+			std::vector<std::string> CausalHeads;
+			std::vector<std::string> CausalHeadFluents;
+			std::vector<std::vector<std::string>> CausalHeadFluentsArgs;
+			std::vector<std::string> CausalBodies;
+			std::vector<std::string> CausalBodyActions;
+			std::vector<std::vector<std::string>> CausalBodyActionsArgs;
+			std::vector<int> CausalLawStartLines;
+			std::vector<int> CausalLawLengths;
+
 			/**
-			 * \brief This method verifies if SourceFile is a valid SPARC file to be loaded. Once this verification has been performed, it extracts the sorts and the sub-sort based hierarchy. This method does not make a full logic and sintactic revision to the source file, it assumes that the source file has been executed.
+			 * \brief This method verifies if SourceFile is a valid SPARC file to be loaded. Once this verification has been performed, it extracts the sorts and the sub-sort based hierarchy. This method does not make a full logic and sintactic revision to the source file, it assumes that the source file has been executed. Also, the rules that were written based on a notation of val(fluent,boolean,step) and occurs(action(arg0,..,argn),step), that correspond to actions' causal laws are extracted.
 			*/
 			void verifyAndLoad();
 
@@ -55,6 +65,11 @@ namespace sp
 			 * \brief The method is for displaying the structure of the sub-sort relation among the sorts extracted from SourceFile.
 			*/
 			void hierDisplay() const;
+
+			/**
+			 * \brief The method is for displaying the structure of the causal laws extracted from the source file.
+			*/
+			void causalDisplay() const;
 
 			friend bool recursiveCheck(DomainSort const &ds, std::string const &input, int sortToCheck);
 
@@ -108,6 +123,13 @@ namespace sp
 			 * \return The returned value is a vector of vectors of states. The returned vector holds one vector of states for each definition in 'subStateDefs'. It also holds an extra vector of states that corresponds to the original vector of states.
 			*/
 			std::vector<std::vector<PState>> generateStates(std::string const &rootGenSort, std::vector<std::string> const &subStateDefs) const;
+
+			/**
+			 * \brief This method generates a vector of instances of actions, from those defined and in the sort structure loaded from the SPARC file. This method will start looking for actions from the sort rootGenSort and will go downwards form there. Also, in order for an action to be instantiated, it must have extactly 1 causal law that describes its effects. As future improvements, we'd like to extend this method to support several causal laws for the same action.
+			 * \param rootGenSort The root sort from which this method will start looking for actions downwards. This string must begin with '#', followed by the name of the root sort.
+			 * \return Returns a vector of Action objects, one for each generated action. All these actions have for time-stamp 0.
+			*/
+			std::vector<Action> generateActions(std::string const &rootGenSort) const;
 
 			std::vector<Transition> generateTransitions(std::vector<PState> const &setS0, std::string const &rootActionSort) const;
 	};

@@ -2,6 +2,7 @@
 #include <PState.hpp>
 #include <sparc2cpp.hpp>
 #include <Transition.hpp>
+#include <Action.hpp>
 
 void sp::DomainSort::verifyAndLoad()
 {
@@ -17,24 +18,27 @@ void sp::DomainSort::verifyAndLoad()
 		return;
 	}
 
-	//Get those lines from the file that are not comments
+	//Get those lines from the file that are not comments and also non-empty
 	std::string line;
 	std::vector<std::string> lines;
 	while(std::getline(inputFile,line)) lines.push_back(line);
 	inputFile.close();
 	std::vector<std::string> noCommLines;
+	std::vector<int> noCommIndexes;
 	for(unsigned int i = 0; i < lines.size() ; i++)
 	{
-		if(lines[i].find('%') == std::string::npos)
+		if(lines[i].find('%') == std::string::npos && lines[i] != "")
 		{
 			noCommLines.push_back(lines[i]);
+			noCommIndexes.push_back(i);
 		}
 	}
 
-	//Strip spaces
+	//Strip spaces and tabs
 	for(unsigned int i = 0; i < noCommLines.size(); i++)
 	{
-		noCommLines[i].erase(std::remove(noCommLines[i].begin(), noCommLines[i].end(), ' '),noCommLines[i].end());
+		noCommLines[i] = sp::stripSpaces(noCommLines[i]);
+		noCommLines[i] = sp::stripTabs(noCommLines[i]);
 	}
 
 	//Get the lines that start '#const'
@@ -55,6 +59,7 @@ void sp::DomainSort::verifyAndLoad()
 	std::vector<std::string> sortDefLines;
 	bool sortsWasRead = false;
 	bool predicatesWasRead = false;
+	int predicate_line_index = 0;
 	for(unsigned int i = 0; i < noCommLines.size(); i++)
 	{
 		if(noCommLines[i] == "sorts")
@@ -63,7 +68,11 @@ void sp::DomainSort::verifyAndLoad()
 			continue;
 		}
 
-		if(noCommLines[i] == "predicates") break;
+		if(noCommLines[i] == "predicates")
+		{
+			predicate_line_index = i;
+			break;
+		}
 
 		if(sortsWasRead)
 		{
@@ -86,6 +95,139 @@ void sp::DomainSort::verifyAndLoad()
 					}
 				}
 			}
+		}
+	}
+
+	//Get those lines that correspond to the definition of a rule and concatenate them
+	//in order to have a single string for each rule. Also save the line number of the
+	//beginning of each rule and the amount of lines it occupies.
+	bool rulesWasRead = false;
+	bool readingARule = false;
+	std::vector<std::string> ruleDefs;
+	std::vector<std::string> ruleLines;
+	std::vector<int> temp_cl_start;
+	std::vector<int> temp_cl_len;
+	for(unsigned int i = predicate_line_index+1; i < noCommLines.size(); i++)
+	{
+		if(noCommLines[i] == "rules")
+		{
+			rulesWasRead = true;
+			continue;
+		}
+
+		if(rulesWasRead)
+		{
+			if(!readingARule)
+			{
+				//The whole rule is contained in a single line
+				if(sp::endsWith(noCommLines[i],"."))
+				{
+					ruleDefs.push_back(noCommLines[i]);
+
+					//Save the rule's starting line and its length
+					temp_cl_start.push_back(noCommIndexes[i]);
+					temp_cl_len.push_back(1);
+				}
+				else
+				{
+					//Start reading a new rule
+					readingARule = true;
+					ruleLines.push_back(noCommLines[i]);
+
+					//Save the rule's starting line
+					temp_cl_start.push_back(noCommIndexes[i]);
+				}
+			}
+			else
+			{
+				ruleLines.push_back(noCommLines[i]);
+
+				//The last part of the currently read rule has been gathered
+				if(sp::endsWith(noCommLines[i],"."))
+				{
+					//Concatenate all the parts of the rule into a single string
+					std::string temp_rule_line("");
+					for(unsigned int j = 0; j < ruleLines.size(); j++)
+					{
+						temp_rule_line += ruleLines[j];
+					}
+
+					//Save the amount of lines this rule occupies in the SPARC file
+					temp_cl_len.push_back(static_cast<int>(ruleLines.size()));
+
+					//Save the rule string
+					ruleDefs.push_back(temp_rule_line);
+					ruleLines.clear();
+					readingARule = false;
+				}
+			}
+		}
+	}
+
+	//From the collection of rules, select only thos that correspond to a causal law, i.e. rules that:
+	//	- Have a single val() literal in the rule's head
+	//	- Have a "<" character and a single occurs() literal in the rule's body
+	std::vector<std::string> causalHeads;
+	std::vector<std::string> causalHeadFluents;
+	std::vector<std::vector<std::string>> causalHeadFluentsArgs;
+
+	std::vector<std::string> causalBodies;
+	std::vector<std::string> causalBodyActions;
+	std::vector<std::vector<std::string>> causalBodyActionsArgs;
+
+	std::vector<int> causalLawStartLines;
+	std::vector<int> causalLawLengths;
+	for(unsigned int i = 0; i < ruleDefs.size(); i++)
+	{
+		int split_index = ruleDefs[i].find(":-");
+		if(ruleDefs[i].rfind("val") < split_index   && 
+		   ruleDefs[i].find("<") > split_index      &&
+		   ruleDefs[i].find("occurs") > split_index &&
+		   sp::countOcc(ruleDefs[i],"val") == 1     &&
+		   sp::countOcc(ruleDefs[i],"<") == 1       &&
+		   sp::countOcc(ruleDefs[i],"occurs") == 1 )
+		{
+			//Split the causal law into: head and body
+			std::vector<std::string> ruleParts = sp::splitStr(ruleDefs[i],":-");
+
+			//Extract the causal law's head and its components
+			causalHeads.push_back(ruleParts[0]);// <---- causal law's head
+			int lp_index = ruleParts[0].find("(");
+			int rp_index = ruleParts[0].rfind(")");
+			std::vector<std::string> temp_vec = sp::splitStr(sp::strBtwn(ruleParts[0],lp_index,rp_index),",");
+			temp_vec = sp::correctCommaSplit(temp_vec);
+			lp_index = temp_vec[0].find("(");
+			rp_index = temp_vec[0].rfind(")");
+			causalHeadFluents.push_back(temp_vec[0].substr(0,lp_index));// <-- causal law head's fluent
+			temp_vec = sp::splitStr(sp::strBtwn(temp_vec[0],lp_index,rp_index),",");
+			causalHeadFluentsArgs.push_back(temp_vec);// <-- causal law head fluent's arguments
+
+			//Extract the causal law's head and its components
+			causalBodies.push_back(ruleParts[1]);// <--- causal law's body
+			temp_vec = sp::splitStr(ruleParts[1],",");
+			temp_vec = sp::correctCommaSplit(temp_vec);
+			int action_index = 0;
+			for(unsigned int j = 0; j < temp_vec.size(); j++)
+			{
+				if(temp_vec[j].find("occurs") != -1)
+				{
+					action_index = j;
+					break;
+				}
+			}
+			lp_index = temp_vec[action_index].find("(");
+			rp_index = temp_vec[action_index].rfind(")");
+			temp_vec = sp::splitStr(sp::strBtwn(temp_vec[action_index],lp_index,rp_index),",");
+			temp_vec = sp::correctCommaSplit(temp_vec);
+			lp_index = temp_vec[0].find("(");
+			rp_index = temp_vec[0].rfind(")");
+			causalBodyActions.push_back(temp_vec[0].substr(0,lp_index));// <--- causal law body's action
+			temp_vec = sp::splitStr(sp::strBtwn(temp_vec[0],lp_index,rp_index),",");
+			causalBodyActionsArgs.push_back(temp_vec);// <--- causal law body action's arguments
+
+			//Save the starting line and the amount of lines this causal law occupies in the SPARC file
+			causalLawStartLines.push_back(temp_cl_start[i]);
+			causalLawLengths.push_back(temp_cl_len[i]);
 		}
 	}
 
@@ -236,6 +378,7 @@ void sp::DomainSort::verifyAndLoad()
 		argsIndexes.push_back(tempAI);
 	}
 
+	//Save the structures extracted from the sorts
 	Consts = conNames;
 	ConstVals = conVals;
 	Sorts = sortNames;
@@ -244,6 +387,16 @@ void sp::DomainSort::verifyAndLoad()
 	SubsortElemIndexes = elemIndexes;
 	SubsortArgsIndexes = argsIndexes;
 	FileIsLoaded = true;
+
+	//Save the structures extracted from the causal laws
+	CausalHeads = causalHeads;
+	CausalHeadFluents = causalHeadFluents;
+	CausalHeadFluentsArgs = causalHeadFluentsArgs;
+	CausalBodies = causalBodies;
+	CausalBodyActions = causalBodyActions;
+	CausalBodyActionsArgs = causalBodyActionsArgs;
+	CausalLawStartLines = causalLawStartLines;
+	CausalLawLengths = causalLawLengths;
 
 	return;
 }
@@ -284,6 +437,36 @@ void sp::DomainSort::hierDisplay() const
 	}
 }
 
+void sp::DomainSort::causalDisplay() const
+{
+	for(unsigned int i = 0; i < CausalHeads.size(); i++)
+	{
+		std::cout << "*********************************************" << std::endl;
+		std::cout << "Causal law head:" + CausalHeads[i] << std::endl;
+		std::cout << "Causal law head fluent: " + CausalHeadFluents[i] << std::endl;
+		std::cout << "Causal law head fluent args: ";
+		for(unsigned int j = 0; j < CausalHeadFluentsArgs[i].size(); j++)
+		{
+			if(j == 0) std::cout << CausalHeadFluentsArgs[i][j];
+			else std::cout << ", " + CausalHeadFluentsArgs[i][j];
+		}
+		std::cout << std::endl;
+		std::cout << "Causal law body:" + CausalBodies[i] << std::endl;
+		std::cout << "Causal law body action:" + CausalBodyActions[i] << std::endl;
+		std::cout << "Causal law body action args: ";
+		for(unsigned int j = 0; j < CausalBodyActionsArgs[i].size(); j++)
+		{
+			if(j == 0) std::cout << CausalBodyActionsArgs[i][j];
+			else std::cout << ", " + CausalBodyActionsArgs[i][j];
+		}
+		std::cout << std::endl;
+		std::cout << "Starting line:" + std::to_string(CausalLawStartLines[i]) << std::endl;
+		std::cout << "Amount of line occupied:" + std::to_string(CausalLawLengths[i]) << std::endl;
+		std::cout << std::endl;
+		std::cout << "*********************************************" << std::endl;
+	}
+}
+
 sp::DomainSort::DomainSort()
 {
 	FileIsLoaded = false;
@@ -318,6 +501,7 @@ void sp::DomainSort::debug() const
 {
 	sortDisplay();
 	hierDisplay();
+	causalDisplay();
 }
 
 std::vector<std::vector<sp::PState>> sp::DomainSort::generateStates(std::string const &rootGenSort, std::vector<std::string> const &subStateDefs) const
@@ -525,6 +709,143 @@ std::vector<std::vector<sp::PState>> sp::DomainSort::generateStates(std::string 
 	outputAnswerSets.push_back(largePS);
 
 	return outputAnswerSets;
+}
+
+std::vector<sp::Action> sp::DomainSort::generateActions(std::string const &rootGenSort) const
+{
+	//Output list of generated actions
+	std::vector<sp::Action> listOfActions;
+
+	//Only if a SPARC has been loaded successfully this method can generate actions
+	if(!FileIsLoaded) return listOfActions;
+
+	//Input parameter checking
+	if(rootGenSort.length() <= 1) return listOfActions;
+	if(!sp::startsWith(rootGenSort,"#")) return listOfActions;
+
+	//Get the sort index that corresponds to sort rootGenSort
+	int rootIndex = -1;
+	for(unsigned int i = 0; i < Sorts.size(); i++)
+	{
+		if(rootGenSort.substr(1,-1) == Sorts[i])
+		{
+			rootIndex = i;
+			break;
+		}
+	}
+	if(rootIndex == -1) return listOfActions;
+
+	//Gather list of actions that are elements of rootGenSort or to one of its sub-sorts and
+	//have a causal law that describe their effects
+	std::vector<std::string> gathActions;
+	std::vector<std::vector<std::string>> gathActionArgs;
+	for(unsigned int i = 0; i < SortElements.size(); i++)
+	{
+		for(unsigned int j = 0; j < SortElements[i].size(); j++)
+		{
+			if(SubsortElemIndexes[i][j] == -1 && 
+			   sp::recursiveCheck((*this),SortElements[i][j],rootIndex))
+			{
+				for(unsigned int k = 0; k < CausalBodyActions.size(); k++)
+				{
+					if(SortElements[i][j] == CausalBodyActions[k] &&
+					   SortArguments[i][j].size() == CausalBodyActionsArgs[k].size())
+					{
+						gathActions.push_back(SortElements[i][j]);
+						gathActionArgs.push_back(SortArguments[i][j]);
+					}
+				}
+			}
+		}
+	}
+
+	//For each action with a causal law, generate all the possible combinations
+	//of input parameters it can receive
+	std::vector<std::vector<std::string>> actionParamCombs;
+	for(unsigned int i = 0; i < gathActionArgs.size(); i++)
+	{
+		std::vector<std::vector<std::string>> params_values;
+		for(unsigned int j = 0; j < gathActionArgs[i].size(); j++)
+		{
+			//Get all the constant objects that can be inserted in the input param gathActionArgs[i][j]
+			std::vector<std::string> temp_values;
+			//Get the root index for this param in the sort structure
+			int param_root_index = -1;
+			for(unsigned int k = 0; k < Sorts.size(); k++)
+			{
+				if(gathActionArgs[i][j] == Sorts[k])
+				{
+					param_root_index = k;
+					break;
+				}
+			}
+			for(unsigned int k = 0; k < SortElements.size(); k++)
+			{
+				for(unsigned int l = 0; l < SortElements[k].size(); l++)
+				{
+					if(SubsortElemIndexes[k][l] == -1 &&
+					   sp::recursiveCheck((*this),SortElements[k][l],param_root_index))
+					{
+						temp_values.push_back(SortElements[k][l]);
+					}
+				}
+			}
+			//Save the lis of possible values
+			params_values.push_back(temp_values);
+		}
+
+		//Compute the total amount of combinations and initialize a vector of empty strings
+		int total_combs = 1;
+		for(unsigned int j = 0; j < params_values.size(); j++)
+			total_combs *= static_cast<int>(params_values[j].size());
+		std::vector<std::string> temp_param_comb(total_combs,"");
+
+		//Generate the parameter combinitations
+		int times_each_val = total_combs;
+		for(unsigned int j = 0; j < params_values.size(); j++)
+		{
+			//Compute how many times a value wil be written uninterrupted in each cycle
+			times_each_val /= static_cast<int>(params_values[j].size());
+			//Compute how many cycles
+			int repetitions = total_combs / (times_each_val * static_cast<int>(params_values[j].size()));
+
+			for(int k = 0; k < repetitions; k++)
+			{
+				for(unsigned int l = 0; l < params_values[j].size(); l++)
+				{
+					for(int m = 0; m < times_each_val; m++)
+					{
+						int abs_index = k*(total_combs/repetitions) +
+								l*times_each_val + 
+								m;
+						//The first parameter does not have a comma in front of it
+						if(j == 0) temp_param_comb[abs_index] += params_values[j][l];
+						else temp_param_comb[abs_index] += (","+params_values[j][l]);
+					}
+				}
+			}
+		}
+
+		//Save the list of param-value combinations for this action
+		actionParamCombs.push_back(temp_param_comb);
+	}
+
+	//Insert each parameter into a valid SPARC action occurrence, that is, of the form
+	//	occurs(action_name(param0,param1,...,paramn),0)
+	//And use that to create an Action object
+	for(unsigned int i = 0; i < actionParamCombs.size(); i++)
+	{
+		for(unsigned int j = 0; j < actionParamCombs[i].size(); j++)
+		{
+			std::string init_str = "occurs(" + gathActions[i] + "(" + actionParamCombs[i][j] +"),0)";
+			std::vector<std::string> init_vec;
+			init_vec.push_back(init_str);
+			sp::Action temp_action(init_vec);
+			listOfActions.push_back(temp_action);
+		}
+	}
+
+	return listOfActions;
 }
 
 std::vector<sp::Transition> sp::DomainSort::generateTransitions(std::vector<sp::PState> const &setS0, std::string const &rootActionSort) const

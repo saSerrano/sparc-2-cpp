@@ -3,6 +3,7 @@
 #include <DomainSort.hpp>
 #include <PState.hpp>
 #include <Transition.hpp>
+#include <Action.hpp>
 
 using namespace std;
 using namespace sp;
@@ -10,41 +11,56 @@ using namespace sp;
 
 int main(int argc, char** argv)
 {
-PState s1("{val(on(b1,b0),true,7)}");
-PState s2("{val(on(b1,t),true,8)}");
-PState s3("{val(on(b3,b0),true,7)}");
-PState s4("{val(on(b9,t),true,8)}");
-PState s5("{val(on(t,b6),true,7)}");
-PState s6("{val(on(b7,t),true,9)}");
-vector<PState> vec;
-vec.push_back(s1);
-vec.push_back(s2);
-vec.push_back(s3);
-vec.push_back(s4);
-vec.push_back(s5);
-//vec.push_back(s6);
-vector<string> a1;
-a1.push_back("occurs(put(b1,t),7)");
-a1.push_back("occurs(put(b3,t),7)");
-Transition t(a1,s4,s6);
-t.setStatesID(vec);
-t.debug();
+//PState ps0,ps1;
+//
+//vector<string> vec1;
+//vec1.push_back("occurs(put(b3,ty),6)");
+//vec1.push_back("occurs(put(b1,t),6)");
+//vector<string> vec2;
+//vec2.push_back("occurs(put(b1,t),6)");
+//vec2.push_back("occurs(put(b3,ty),6)");
+//vector<string> vec3;
+//vec3.push_back("occurs(put(b9,t),6)");
+//vec3.push_back("occurs(put(b7,ty),6)");
+//vector<string> vec4;
+//vec4.push_back("occurs(put(b9,t),45)");
+//vec4.push_back("occurs(put(b7,ty),45)");
+//
+//Action A1(vec1);
+//Action A2(vec2);
+//Action A3(vec3);
+//Action A4(vec4);
+//
+//vector<Action> list_of_actions;
+//list_of_actions.push_back(A1); 
+//list_of_actions.push_back(A2); 
+//list_of_actions.push_back(A3); 
+//
+//Transition T(A4,ps0,ps1);
+//T.debug();
+//T.listActionID(list_of_actions);
+//T.debug();
 
-//vector<string> a2;
-//a2.push_back("occurs(put(b3,ty),6)");
-//a2.push_back("occurs(put(b1,t),6)");
+
 //
 //Transition t1,t2;
 //t1.set(a1,s1,s2);
-//t2.set(a2,s1,s2);
+//t2.set(vec1,s1,s2);
 //
 //cout << t1.beforeThan(t2) << endl;
 //cout << t2.beforeThan(t1) << endl;
 //cout << t1.atSameTime(t1) << endl;
 
-//	string sparcFile("/home/zero/Dropbox/Tesis/SPARC-Learn/2pomdp/blocks-orig.sp");
-//	DomainSort ds;
-//	ds.loadFile(sparcFile);
+
+	string sparcFile("/home/zero/Dropbox/Tesis/SPARC-Learn/2pomdp/blocks-orig.sp");
+	DomainSort ds;
+	ds.loadFile(sparcFile);
+	vector<Action> listA = ds.generateActions("#action");
+	for(unsigned int i = 0; i < listA.size(); i++)
+	{
+		listA[i].debug();
+	}
+//	ds.debug();
 //	PState s1("{val(on(b1,b0),true,7)}");
 //	vector<PState> vec;
 //	vec.push_back(s1);

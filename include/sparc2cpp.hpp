@@ -80,6 +80,12 @@ namespace sp
 	std::string stripSpaces(std::string const &s);
 
 	/**
+	 * \brief This method eliminates the occurrences of the special character '\t', i.e. the tab character.
+	 * \param s String to be modified.
+	 * \return Returns the version without tab spaces of the input string s.
+	*/
+	std::string stripTabs(std::string const &s);
+	/**
 	 * \brief This method is for segmenting an input string into a list of tokens separated by a delimiter sub-string.
 	 * \param fullString The whole input string.
 	 * \param delimiter The sub-string that will be considered the token delimiter.
