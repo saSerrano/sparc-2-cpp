@@ -11,6 +11,7 @@
  */
 
 #include <sparc2cpp.hpp>
+#include <DomainSort.hpp>
 #include <string>
 #include <vector>
 
@@ -19,6 +20,9 @@
 
 namespace sp
 {
+	class DomainSort;
+	class PState;
+	class Transition;
 	class Action
 	{
 		private:
@@ -32,6 +36,8 @@ namespace sp
 			 * \return Returns true if all of the strings in actionStrings were successfully converted into a valid action, otherwise, false.
 			*/
 			bool exractActionsFromString(std::vector<std::string> actionStrings);
+
+			friend std::vector<Transition> DomainSort::generateTransitions(std::vector<PState> const &setS0, std::vector<Action> &setA, std::string const &rootActionSort);
 
 		public:
 

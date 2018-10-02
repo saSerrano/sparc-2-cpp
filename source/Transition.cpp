@@ -29,11 +29,9 @@ void sp::Transition::debug() const
 	std::cout << "IndexPs0: " << IndexPs0 << std::endl;
 	std::cout << "IndexPs1: " << IndexPs1 << std::endl;
 	std::cout << "IndexAction: " << IndexAction << std::endl;
-	std::cout << "P-STATE-0:" << std::endl;
-	ps0.debug();
+	std::cout << "P-STATE-0: " + ps0.str() << std::endl;
 	SetofActions.debug();
-	std::cout << "P-STATE-1:";
-	ps1.debug();
+	std::cout << "P-STATE-1: " + ps1.str() << std::endl;
 }
 
 void sp::Transition::set(sp::Action SetofActions, sp::PState ps0, sp::PState ps1)
@@ -56,7 +54,7 @@ bool sp::Transition::setStatesID(std::vector<sp::PState> const &setOfStates)
 	{
 		if(index_s0 == -1 && ps0.equals(setOfStates[i])) index_s0 = i;
 
-		if(index_s1 == -1 && ps1.equals(setOfStates[i])) index_s1 = i;
+		if(index_s1 == -1 && ps1.equalsExcLastArg(setOfStates[i])) index_s1 = i;
 
 		if(index_s0 > -1 && index_s1 > -1) break;
 	}
@@ -100,7 +98,7 @@ bool sp::Transition::atSameTime(sp::Transition const &t) const
 	return (SetofActions.step() == t.SetofActions.step());
 }
 
-bool sp::Transition::listActionID(std::vector<sp::Action> const &listOfActions)
+bool sp::Transition::setActionID(std::vector<sp::Action> const &listOfActions)
 {
 	bool foundInVector = false;
 

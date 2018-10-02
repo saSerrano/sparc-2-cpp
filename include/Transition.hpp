@@ -13,6 +13,7 @@
 #include <sparc2cpp.hpp>
 #include <PState.hpp>
 #include <Action.hpp>
+#include <DomainSort.hpp>
 
 #include <string>
 #include <vector>
@@ -22,6 +23,7 @@
 
 namespace sp
 {
+	class DomainSort;
 	class PState;
 	class Action;
 	class Transition
@@ -116,7 +118,7 @@ namespace sp
 			 * \param listOfActions Vector of Action objects from which the set of actions' ID will be extracted.
 			 * \return Returns true if the set of actions was found within listOfActions, otherwise, false.
 			*/
-			bool listActionID(std::vector<Action> const &listOfActions);
+			bool setActionID(std::vector<Action> const &listOfActions);
 	};
 }
 

@@ -51,15 +51,50 @@ int main(int argc, char** argv)
 //cout << t2.beforeThan(t1) << endl;
 //cout << t1.atSameTime(t1) << endl;
 
-
+	//Load the Domain description via a SPARC file
 	string sparcFile("/home/zero/Dropbox/Tesis/SPARC-Learn/2pomdp/blocks-orig.sp");
 	DomainSort ds;
 	ds.loadFile(sparcFile);
-	vector<Action> listA = ds.generateActions("#action");
-	for(unsigned int i = 0; i < listA.size(); i++)
-	{
-		listA[i].debug();
-	}
+
+	//Generate all the states, in this case only inertial fluents are considered
+	vector<string> defs;
+	defs.push_back("val(#inertial_f,true,X)");
+	vector<vector<PState>> all_states = ds.generateStates("#inertial_f",defs);
+	vector<PState> i_states = all_states[0];
+
+	//Generate the list of actions
+	vector<Action> i_actions = ds.generateActions("#action");
+
+cout << "# actions: " << i_actions.size() << endl;
+	//Generate the transitions the result from the non-deterministic excution
+	//of actions in i_actions over the states in i_states
+	vector<Transition> i_trans = ds.generateTransitions(i_states,i_actions,"#inertial_f");
+cout << "# actions: " << i_actions.size() << endl;
+cout << "# transitions: " << i_trans.size() << endl;
+
+//vector<PState> setS0;
+//PState ps1("{loc(r1,c5),loc(r2,c6)}");
+//PState ps2("{loc(door,c7),loc(toilet,c3)}");
+//setS0.push_back(ps1);
+//setS0.push_back(ps2);
+//
+//vector<string> vec;
+//vector<Action> setA;
+//vec.push_back("occurs(put(b5,t),0)");
+//Action a1(vec);
+//setA.push_back(a1);
+//vec.push_back("occurs(put(b7,b5),0)");
+//Action a2(vec);
+//setA.push_back(a2);
+//
+//ds.generateTransitions(setS0,setA,"#defined_f");
+
+//	vector<Action> listA = ds.generateActions("#action");
+//	for(unsigned int i = 0; i < listA.size(); i++)
+//	{
+//		listA[i].debug();
+//	}
+
 //	ds.debug();
 //	PState s1("{val(on(b1,b0),true,7)}");
 //	vector<PState> vec;

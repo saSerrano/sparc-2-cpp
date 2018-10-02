@@ -22,6 +22,7 @@ namespace sp
 {
 	class DomainSort;
 	class Transition;
+	class Action;
 	class PState
 	{
 		private:
@@ -46,7 +47,7 @@ namespace sp
 
 			friend PState subPstate(DomainSort const &ds, PState const &ps, std::vector<std::string> const &defs);
 
-			friend std::vector<Transition> DomainSort::generateTransitions(std::vector<PState> const &setS0, std::string const &rootActionSort) const;
+			friend std::vector<Transition> DomainSort::generateTransitions(std::vector<PState> const &setS0, std::vector<Action> &setA, std::string const &rootDisplaySort);
 
 		public:
 
@@ -84,6 +85,13 @@ namespace sp
 			 * \brief This method is mainly used to display information about the literals, which is useful for debugging.
 			*/
 			void debug() const;
+			
+			/**
+			 * \brief This method verifies if the instance state from which is invoked contains a set of literals that the input state ps2 has, however, the literals must differ in their last argument to find their match. That is, in order for a pair of literals to match, they must have the same name and have the same arguments, except by the last one. This method was specially developed to match states that differ only in their time-stamp, which is usually encoded as the last argument. 
+			 * \param ps2 The other state to which the instance will compare to.
+			 * \return Returns true if both states have the same set of literals that differ only in their last argument, otherwise, false.
+			*/
+			bool equalsExcLastArg(PState const &ps2) const;
 			
 			/**
 			 * \brief This method verifies if the instance state from which is invoked contains the exact same set of literals that the input state ps2 has, which in turn would mean that these states are the same. This method is robust against different ordering of the literals.
