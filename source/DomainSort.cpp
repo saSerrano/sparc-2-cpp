@@ -181,12 +181,10 @@ void sp::DomainSort::verifyAndLoad()
 	for(unsigned int i = 0; i < ruleDefs.size(); i++)
 	{
 		int split_index = ruleDefs[i].find(":-");
-		if(ruleDefs[i].rfind("val") < split_index   && 
-		   ruleDefs[i].find("<") > split_index      &&
-		   ruleDefs[i].find("occurs") > split_index &&
-		   sp::countOcc(ruleDefs[i],"val") == 1     &&
-		   sp::countOcc(ruleDefs[i],"<") == 1       &&
-		   sp::countOcc(ruleDefs[i],"occurs") == 1 )
+		if(ruleDefs[i].find("val") < split_index    && //There is a 'val' in the head 
+		   ruleDefs[i].find("<") > split_index      && //There is a '<' in the body
+		   ruleDefs[i].find("occurs") > split_index && //There is a 'occurs' in the body
+		   sp::countOcc(ruleDefs[i],"occurs") == 1 )   //There is exactly 1 'occurs' in the whole rule
 		{
 			//Split the causal law into: head and body
 			std::vector<std::string> ruleParts = sp::splitStr(ruleDefs[i],":-");
@@ -214,7 +212,6 @@ void sp::DomainSort::verifyAndLoad()
 				if(temp_vec[j].find("occurs") != -1)
 				{
 					action_index = j;
-					//break;
 				}
 				else
 				{
@@ -403,10 +400,8 @@ void sp::DomainSort::verifyAndLoad()
 	FileIsLoaded = true;
 
 	//Save the structures extracted from the causal laws
-	//CausalHeads = causalHeads;
 	CausalHeadFluents = causalHeadFluents;
 	CausalHeadFluentsArgs = causalHeadFluentsArgs;
-	//CausalBodies = causalBodies;
 	CausalBodyActions = causalBodyActions;
 	CausalBodyActionsArgs = causalBodyActionsArgs;
 	CausalBodyOthers = causalBodyOthers;

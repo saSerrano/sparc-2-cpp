@@ -62,47 +62,24 @@ int sp::countOcc(std::string const &fullString, std::string const &s)
 
 std::vector<std::string> sp::correctCommaSplit(std::vector<std::string> commaSplit)
 {
-	int prevArgsLen;
-	while(true)
+	std::vector<std::string> output;
+	std::string tempStr("");
+	int depth = 0;
+	for(unsigned int i = 0; i < commaSplit.size(); i++)
 	{
-		//Iterate over 'lits' to joint the tokens that are part of a same argument
-		prevArgsLen = commaSplit.size();
-		std::string tempStr("");
-		int tempInt = -1;
-		int depth = 0;
-		for(unsigned int i = 0; i < commaSplit.size(); i++)
+		int left_po = countOcc(commaSplit[i],"(");
+		int right_po = countOcc(commaSplit[i],")");
+		depth += (left_po - right_po);
+		tempStr += (commaSplit[i] + ",");
+		if(depth == 0)
 		{
-			int left_po = countOcc(commaSplit[i],"(");
-			int right_po = countOcc(commaSplit[i],")");
-			if(left_po > 0 && right_po == 0)
-			{
-				if(depth == 0) tempInt = i;
-				depth += left_po;
-				tempStr = tempStr + commaSplit[i] + ",";
-			}
-			else if(left_po == 0 && right_po > 0)
-			{
-				depth -= right_po;
-				tempStr = tempStr + commaSplit[i];
-				if(depth == 0)
-				{
-					commaSplit[tempInt] = tempStr;
-					if(i == commaSplit.size()-1) commaSplit.erase(commaSplit.begin()+tempInt+1,commaSplit.end());
-					else commaSplit.erase(commaSplit.begin()+tempInt+1,commaSplit.begin()+i+1);
-					break;
-				}
-				tempStr = tempStr + ",";
-			}
-			else if(depth > 0)
-			{
-				tempStr = tempStr + commaSplit[i] + ",";
-			}
+			int temp_len = tempStr.length();
+			output.push_back(tempStr.substr(0,temp_len-1));
+			tempStr = "";
 		}
-
-		if(commaSplit.size() == prevArgsLen) break;
 	}
 
-	return commaSplit;
+	return output;
 }
 
 std::string sp::stripSpaces(std::string const &s)
