@@ -891,6 +891,54 @@ std::vector<sp::Transition> sp::DomainSort::generateTransitions(std::vector<sp::
 
 	*/
 
+	/*
+
+	* ISSUES WITH NON-DETERMINISTIC CAUSAL LAWS
+
+	When a causal law is being extended to its non-deterministic version, a defined fluent 
+	is created for the purpose of defining the set of possible outcomes for the particular 
+	occurrences of the action.
+
+	Once this defined fluent has been created, there are two sets of variables that are of 
+	our particular interest:
+		- The variables in the head of the causal law (set A)
+		- The variables that are parameters of the action (set B)
+
+	It is clear that the variables in the fluent that is a result of executing the action 
+	and the variables of the defined fluent must have a 1-to-1 correspondance. However, it 
+	is not obvious the way the varibles from set A and set B relate to each other.
+
+	In order for a system to automatically generate transitions of states using non-deterministic 
+	causal laws (with choice rules), it is necessary to homogenize the way causal laws are written. 
+	By homogenizing causal law's structures, we provide a standard rule on the correspondance of 
+	variables in set A and set B.
+
+	As an attempt to homogenize causal laws, we provide a standard that described as follows:
+
+	  i) The list of input parameters of an action and the fluent it modifies, must be share 
+	the first type of input parameter, therefore, they can have different lists of input 
+	parameters. For instance,
+
+					location(#robot,#cell) and move_left(#robot)
+
+	 ii) All inertial fluents (those modified by actions) are interpreted as properties of an 
+	object. In our homogenization, the object this properties describe is always the first 
+	variable of the fluent, that is,
+
+					Property(Object,Prop_param1,Prop_param1,...)
+
+	iii) When generating a non-deterministic causal law, the correspondance between variables 
+	of set A and those of set B, is defined only by a 1-to-1 correspondance between the first 
+	parameter of A and B. The rest of the parameters are completely unrelated. For instance,
+
+	Example 1.
+	{val(on(B,V0),true,I+1) : val(poss_outcome_put(B,V0),true,I)} :- I < n, occurs(put(B,L),I).
+
+	Example 2.
+	{val(location(R,V0),true,I+1) : val(poss_outcome_move_left(R,V0),true,I)} :- I < n, occurs(move_left(R),I).
+
+	*/
+
 	//Vector with hold the generated transitions
 	std::vector<sp::Transition> outputTrans;
 

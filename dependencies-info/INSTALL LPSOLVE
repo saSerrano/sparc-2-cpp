@@ -1,0 +1,5 @@
+Get configure-enabled lpsolve from: http://bashdb.sf.net/lpsolve-5.5.0.10i.tar.bz2
+
+tar -xpf lpsolve-5.5.0.10i.tar.bz2
+   cd ./lpsolve-5.5.0.10i
+   ./configure --prefix=/usr && make && make check && sudo make install

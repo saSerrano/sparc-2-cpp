@@ -1,0 +1,9 @@
+Download from: http://bitbucket.org/eigen/eigen/get/3.3.5.tar.gz
+
+tar -xzvf eigen-eigen-b3f3d4950030.tar.gz
+cd eigen-eigen-b3f3d4950030
+mkdir build
+cd build
+cmake ..
+make
+sudo make install
