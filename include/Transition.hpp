@@ -119,6 +119,13 @@ namespace sp
 			 * \return Returns true if the set of actions was found within listOfActions, otherwise, false.
 			*/
 			bool setActionID(std::vector<Action> const &listOfActions);
+
+			int iS0() const;
+
+			int iS1() const;
+
+			int iA() const;
+
 	};
 }
 

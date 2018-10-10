@@ -11,6 +11,7 @@
  */
 
 #include <sparc2cpp.hpp>
+#include <Pomdp.hpp>
 
 #include <string>
 #include <vector>
@@ -28,6 +29,7 @@ namespace sp
 	class PState;
 	class Transition;
 	class Action;
+	class Pomdp;
 	class DomainSort
 	{
 		private:
@@ -75,6 +77,16 @@ namespace sp
 			friend bool checkDef(DomainSort const &ds, std::string const &def, std::string const &input);
 
 			friend PState subPstate(DomainSort const &ds, PState const &ps, std::vector<std::string> const &defs);
+
+			friend bool Pomdp::generatePomdp(std::vector<PState> &S, 
+						      std::vector<Action> const &nkA, 
+						      std::vector<Action> const &kA, 
+						      std::vector<Action> const &termA, 
+						      std::vector<PState> &Z, 
+						      std::vector<Transition> const &T, 
+						      DomainSort const &ds, 
+						      std::string const &pomdpFile);
+
 		public:
 
 			/**

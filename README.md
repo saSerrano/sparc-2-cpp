@@ -33,6 +33,5 @@ In these examples, `b2(#sort_a)` is not supported given that its argument is a s
 
 ## Dependencies
 
-* **SPARC**: In order for the some of the functions of **SPARC-2-CPP** to properly work it is necessary to have installed the [SPARC translator](https://github.com/iensen/sparc) and the ASP solver [Clingo](https://github.com/potassco/clingo/releases/), due to at the moment is the only solver that supports choice rules, which are required.
+* **SPARC**: In order for the some of the functions of **SPARC-2-CPP** to properly work it is necessary to have installed the [SPARC translator](https://github.com/iensen/sparc) and the ASP solver [Clingo](https://github.com/potassco/clingo/releases/), due to at the moment is the only solver that supports choice rules, which are required. Also, before running an example, the user should change the **PATH_TO_SPARC** constant in the **include/DomainSort.hpp** file, for the system to be able to find the SPARC translator.
 
-* **AI-Toolbox**: This library is a C++ framework for MDPs and POMDPs, which can be found [here](https://github.com/Svalorzen/AI-Toolbox), is used by **SPARC-2-CPP** to solve POMDPs generated from SPARC files. Sub-directory **dependencies-info** contains several files with information on how to setup the dependencies required by **AI-Toolbox**.

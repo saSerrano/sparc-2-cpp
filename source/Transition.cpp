@@ -114,3 +114,18 @@ bool sp::Transition::setActionID(std::vector<sp::Action> const &listOfActions)
 
 	return foundInVector;
 }
+
+int sp::Transition::iS0() const
+{
+	return IndexPs0;
+}
+
+int sp::Transition::iS1() const
+{
+	return IndexPs1;
+}
+
+int sp::Transition::iA() const
+{
+	return IndexAction;
+}

@@ -23,6 +23,8 @@
 namespace sp
 {
 	class PState;
+	class Action;
+	class Transition;
 	class DomainSort;
 
 	/**
@@ -85,6 +87,7 @@ namespace sp
 	 * \return Returns the version without tab spaces of the input string s.
 	*/
 	std::string stripTabs(std::string const &s);
+
 	/**
 	 * \brief This method is for segmenting an input string into a list of tokens separated by a delimiter sub-string.
 	 * \param fullString The whole input string.
@@ -133,6 +136,7 @@ namespace sp
 	 * \return Returns a set of literals in the form of a PState object.
 	*/
 	PState subPstate(DomainSort const &ds, PState const &ps, std::vector<std::string> const &defs);
+
 }
 
 #endif
