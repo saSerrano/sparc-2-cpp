@@ -520,213 +520,6 @@ void sp::DomainSort::debug() const
 	causalDisplay();
 }
 
-std::vector<std::vector<sp::PState>> sp::DomainSort::generateStates(std::string const &rootGenSort, std::vector<std::string> const &subStateDefs) const
-{
-	/*
-
-	This method assumes that the SPARC file loaded to generate this DomainSort:
-
-	- Has predicate: val(#fluent,#boolean,#step)
-	- Has sort: #boolean = {true,false}
-	- Has sort: #step = 0..max_step
-	- Has sort: #defined_f = 
-
-	*/
-
-	//Verification of input parameters
-	if(!FileIsLoaded) return std::vector<std::vector<sp::PState>>();
-	if(rootGenSort.length() <= 1) return std::vector<std::vector<sp::PState>>();
-	if(!sp::startsWith(rootGenSort,"#")) return std::vector<std::vector<sp::PState>>();
-
-	//Gather all the sorts that belong to 'rootGenSort' or to one of its sub-sorts,
-	// and their respectie arguments
-	int rootIndex = -1;
-	for(unsigned int i = 0; i < Sorts.size(); i++)
-	{
-		if(Sorts[i] == rootGenSort.substr(1,-1))
-		{
-			rootIndex = i;
-			break;
-		}
-	}
-	if(rootIndex == -1) return std::vector<std::vector<sp::PState>>();
-	std::vector<std::string> gathElements;
-	std::vector<std::vector<std::string>> gathArguments;
-	for(unsigned int i = 0; i <= rootIndex ; i++)
-	{
-		for(unsigned int j = 0; j < SortElements[i].size(); j++)
-		{
-			if((SubsortElemIndexes[i][j] == -1) && sp::recursiveCheck((*this),SortElements[i][j],rootIndex))
-			{
-				gathElements.push_back(SortElements[i][j]);
-				if(SortArguments[i][j].size() > 0)
-				{
-					std::vector<std::string> temp_gathArguments;
-					for(unsigned int k = 0; k < SortArguments[i][j].size(); k++)
-					{
-						temp_gathArguments.push_back(SortArguments[i][j][k]);
-					}
-					gathArguments.push_back(temp_gathArguments);
-				}
-				else gathArguments.push_back(std::vector<std::string>());
-			}
-		}
-	}
-
-	//For each of the gathered elements that have arguments, generate:
-	//	- A defined fluent
-	// 	- The defined fluent's definition in the form of a SPARC rule
-	//	- A states generating rule (SPARC choice rule)
-	std::vector<std::string> dfName;
-	std::vector<std::string> dfDef;
-	std::vector<std::string> dfGenRule;
-	for(unsigned int i = 0; i < gathElements.size(); i++)
-	{
-		std::string temp_dfName("");
-		std::string temp_dfDef("");
-		std::string temp_dfGenRule("");
-
-		//Name of the 'part of state' defined fluent
-		temp_dfName = "ds_part_of_pstate_" + gathElements[i];
-
-		//Definition of the defined fluent
-		temp_dfDef = "val(" + temp_dfName + "(";
-		for(unsigned int j = 0; j < gathArguments[i].size(); j++)
-		{
-			if(j == 0) temp_dfDef = temp_dfDef + "V" + std::to_string(j);
-			else temp_dfDef = temp_dfDef + ",V" + std::to_string(j);
-		}
-		temp_dfDef = temp_dfDef + "),true,I) :- ";
-		for(unsigned int j = 0; j < gathArguments[i].size(); j++)
-		{
-			temp_dfDef = temp_dfDef + "#" + gathArguments[i][j] + "(V" + std::to_string(j) + ")";
-			if(j == static_cast<int>(gathArguments[i].size()-1)) temp_dfDef = temp_dfDef + ".";
-			else temp_dfDef = temp_dfDef + ",";
-		}
-
-		//Definition of the state generating rule for this fluent
-		temp_dfGenRule = "{val(" + gathElements[i] + "(";
-		for(unsigned int j = 0; j < gathArguments[i].size(); j++)
-		{
-			if(j == 0) temp_dfGenRule = temp_dfGenRule + "V" + std::to_string(j);
-			else temp_dfGenRule = temp_dfGenRule + ",V" + std::to_string(j);
-		}
-		temp_dfGenRule = temp_dfGenRule + "),true,0):val(" + temp_dfName + "(";
-		for(unsigned int j = 0; j < gathArguments[i].size(); j++)
-		{
-			if(j == 0) temp_dfGenRule = temp_dfGenRule + "V" + std::to_string(j);
-			else temp_dfGenRule = temp_dfGenRule + ",V" + std::to_string(j);
-		}
-		temp_dfGenRule = temp_dfGenRule + "),true,0)}.";
-
-		//Save the definitions
-		dfName.push_back(temp_dfName);
-		dfDef.push_back(temp_dfDef);
-		dfGenRule.push_back(temp_dfGenRule);
-	}
-
-	//Insert the 'part of state' defined fluents in a copy of the original SPARC file
-	//to generate the the p-states
-
-	//Create a copy file from 'SourceFile'
-	std::vector<std::string> path_vec = sp::splitStr(SourceFile,"/");
-	int last_index = path_vec.size() - 1;
-	std::vector<std::string> temp_vec = sp::splitStr(path_vec[last_index],".");
-	std::string cpFile = temp_vec[0] + "_GEN_STATES.sp";
-
-	//Add the defined fluents
-	std::ifstream inputFile;
-	std::ofstream outputFile;
-	inputFile.open(SourceFile,std::ifstream::in);
-	outputFile.open(cpFile,std::ofstream::out);
-	std::string temp_line;
-	while(std::getline(inputFile,temp_line))
-	{
-		if(sp::startsWith(temp_line,"#defined_f"))
-		{
-			std::vector<std::string> temp_vec = sp::splitStr(temp_line,".");
-			temp_line = temp_vec[0];
-			//Append the defined fluents
-			for(unsigned int i = 0; i < dfName.size(); i++)
-			{
-				temp_line = temp_line + " + " + dfName[i] + "(";
-				for(unsigned int j = 0; j < gathArguments[i].size(); j++)
-				{
-					if(j == 0) temp_line = temp_line + "#" + gathArguments[i][j];
-					else temp_line = temp_line + ",#" + gathArguments[i][j];
-				}
-				temp_line = temp_line + ")";
-			}
-			temp_line = temp_line + ".";
-
-			outputFile << temp_line << std::endl;
-		}
-		else if(sp::startsWith(temp_line,"display")) break;
-		else outputFile << temp_line << std::endl;
-	}
-	inputFile.close();
-
-	//Add the defined fluents' rules
-	for(unsigned int i = 0; i < dfDef.size(); i++)
-	{
-		outputFile << dfDef[i] << std::endl;
-	}
-
-	//Add the p-state generating rules
-	for(unsigned int i = 0; i < dfGenRule.size(); i++)
-	{
-		outputFile << dfGenRule[i] << std::endl;
-	}
-
-	//Add the filter to display only the literals of interest
-	outputFile << "display" << std::endl;
-	for(unsigned int i = 0; i < gathElements.size(); i++)
-	{
-		std::string disp_str;
-		disp_str = "val("+gathElements[i]+"(";
-		for(unsigned int j = 0; j < gathArguments[i].size(); j++)
-		{
-			if(j == 0) disp_str = disp_str + "V" + std::to_string(j);
-			else disp_str = disp_str + ",V" + std::to_string(j);
-		}
-		disp_str = disp_str + "),true,0).";
-
-		outputFile << disp_str << std::endl;
-	}
-	outputFile.close();
-
-	//Generate the p-states answer-sets file
-	sp::shellCmd("java -jar "+std::string(PATH_TO_SPARC)+" "+cpFile+" -A > STATES_AS.txt");
-	//Extract the p-states from the answer-sets file
-	std::vector<sp::PState> extPS = sp::pstatesFromFile("STATES_AS.txt");
-
-	//From the whole set of p-states keep those with the largest length
-	int max_len = -1;
-	std::vector<sp::PState> largePS;
-	for(unsigned int i = 0; i < extPS.size(); i++) if(extPS[i].len() > max_len) max_len = extPS[i].len();
-	for(unsigned int i = 0; i < extPS.size(); i++) if(extPS[i].len() == max_len) largePS.push_back(extPS[i]);
-
-	//From the p-states with the largest length, for each definition in 'subStateDefs' extract sub-pstates
-	//that satisfy such definition
-	std::vector<std::vector<sp::PState>> outputAnswerSets;
-	for(unsigned int i = 0; i < subStateDefs.size(); i++)
-	{
-		std::vector<sp::PState> temp_as;
-		std::vector<std::string> temp_def;
-		temp_def.push_back(subStateDefs[i]);
-		for(unsigned int j = 0; j < largePS.size(); j++)
-		{
-			sp::PState temp_ps = sp::subPstate((*this),largePS[j],temp_def);
-			temp_as.push_back(temp_ps);
-		}
-		outputAnswerSets.push_back(temp_as);
-	}
-	//Always include the original whole Answer sets
-	outputAnswerSets.push_back(largePS);
-
-	return outputAnswerSets;
-}
-
 std::vector<sp::Action> sp::DomainSort::generateActions(std::string const &rootGenSort) const
 {
 	//Output list of generated actions
@@ -1180,6 +973,212 @@ std::vector<sp::Transition> sp::DomainSort::generateTransitions(std::vector<sp::
 	return outputTrans;
 }
 
+std::vector<std::vector<sp::PState>> sp::DomainSort::generateStates(std::string const &rootGenSort, std::vector<std::string> const &subStateDefs) const
+{
+	/*
+
+	This method assumes that the SPARC file loaded to generate this DomainSort:
+
+	- Has predicate: val(#fluent,#boolean,#step)
+	- Has sort: #boolean = {true,false}
+	- Has sort: #step = 0..max_step
+	- Has sort: #defined_f = 
+
+	*/
+
+	//Verification of input parameters
+	if(!FileIsLoaded) return std::vector<std::vector<sp::PState>>();
+	if(rootGenSort.length() <= 1) return std::vector<std::vector<sp::PState>>();
+	if(!sp::startsWith(rootGenSort,"#")) return std::vector<std::vector<sp::PState>>();
+
+	//Gather all the sorts that belong to 'rootGenSort' or to one of its sub-sorts,
+	// and their respective arguments
+	int rootIndex = -1;
+	for(unsigned int i = 0; i < Sorts.size(); i++)
+	{
+		if(Sorts[i] == rootGenSort.substr(1,-1))
+		{
+			rootIndex = i;
+			break;
+		}
+	}
+	if(rootIndex == -1) return std::vector<std::vector<sp::PState>>();
+	std::vector<std::string> gathElements;
+	std::vector<std::vector<std::string>> gathArguments;
+	for(unsigned int i = 0; i <= rootIndex ; i++)
+	{
+		for(unsigned int j = 0; j < SortElements[i].size(); j++)
+		{
+			if((SubsortElemIndexes[i][j] == -1) && sp::recursiveCheck((*this),SortElements[i][j],rootIndex))
+			{
+				gathElements.push_back(SortElements[i][j]);
+				if(SortArguments[i][j].size() > 0)
+				{
+					std::vector<std::string> temp_gathArguments;
+					for(unsigned int k = 0; k < SortArguments[i][j].size(); k++)
+					{
+						temp_gathArguments.push_back(SortArguments[i][j][k]);
+					}
+					gathArguments.push_back(temp_gathArguments);
+				}
+				else gathArguments.push_back(std::vector<std::string>());
+			}
+		}
+	}
+
+	//For each of the gathered elements that have arguments, generate:
+	//	- A defined fluent
+	// 	- The defined fluent's definition in the form of a SPARC rule
+	//	- A states generating rule (SPARC choice rule)
+	std::vector<std::string> dfName;
+	std::vector<std::string> dfDef;
+	std::vector<std::string> dfGenRule;
+	for(unsigned int i = 0; i < gathElements.size(); i++)
+	{
+		std::string temp_dfName("");
+		std::string temp_dfDef("");
+		std::string temp_dfGenRule("");
+
+		//Name of the 'part of state' defined fluent
+		temp_dfName = "ds_part_of_pstate_" + gathElements[i];
+
+		//Definition of the defined fluent
+		temp_dfDef = "val(" + temp_dfName + "(";
+		for(unsigned int j = 0; j < gathArguments[i].size(); j++)
+		{
+			if(j == 0) temp_dfDef = temp_dfDef + "V" + std::to_string(j);
+			else temp_dfDef = temp_dfDef + ",V" + std::to_string(j);
+		}
+		temp_dfDef = temp_dfDef + "),true,I) :- ";
+		for(unsigned int j = 0; j < gathArguments[i].size(); j++)
+		{
+			temp_dfDef = temp_dfDef + "#" + gathArguments[i][j] + "(V" + std::to_string(j) + ")";
+			if(j == static_cast<int>(gathArguments[i].size()-1)) temp_dfDef = temp_dfDef + ".";
+			else temp_dfDef = temp_dfDef + ",";
+		}
+
+		//Definition of the state generating rule for this fluent
+		temp_dfGenRule = "{val(" + gathElements[i] + "(";
+		for(unsigned int j = 0; j < gathArguments[i].size(); j++)
+		{
+			if(j == 0) temp_dfGenRule = temp_dfGenRule + "V" + std::to_string(j);
+			else temp_dfGenRule = temp_dfGenRule + ",V" + std::to_string(j);
+		}
+		temp_dfGenRule = temp_dfGenRule + "),true,0):val(" + temp_dfName + "(";
+		for(unsigned int j = 0; j < gathArguments[i].size(); j++)
+		{
+			if(j == 0) temp_dfGenRule = temp_dfGenRule + "V" + std::to_string(j);
+			else temp_dfGenRule = temp_dfGenRule + ",V" + std::to_string(j);
+		}
+		temp_dfGenRule = temp_dfGenRule + "),true,0)}.";
+
+		//Save the definitions
+		dfName.push_back(temp_dfName);
+		dfDef.push_back(temp_dfDef);
+		dfGenRule.push_back(temp_dfGenRule);
+	}
+
+	//Insert the 'part of state' defined fluents in a copy of the original SPARC file
+	//to generate the the p-states
+
+	//Create a copy file from 'SourceFile'
+	std::vector<std::string> path_vec = sp::splitStr(SourceFile,"/");
+	int last_index = path_vec.size() - 1;
+	std::vector<std::string> temp_vec = sp::splitStr(path_vec[last_index],".");
+	std::string cpFile = temp_vec[0] + "_GEN_STATES.sp";
+
+	//Add the defined fluents
+	std::ifstream inputFile;
+	std::ofstream outputFile;
+	inputFile.open(SourceFile,std::ifstream::in);
+	outputFile.open(cpFile,std::ofstream::out);
+	std::string temp_line;
+	while(std::getline(inputFile,temp_line))
+	{
+		if(sp::startsWith(temp_line,"#defined_f"))
+		{
+			std::vector<std::string> temp_vec = sp::splitStr(temp_line,".");
+			temp_line = temp_vec[0];
+			//Append the defined fluents
+			for(unsigned int i = 0; i < dfName.size(); i++)
+			{
+				temp_line = temp_line + " + " + dfName[i] + "(";
+				for(unsigned int j = 0; j < gathArguments[i].size(); j++)
+				{
+					if(j == 0) temp_line = temp_line + "#" + gathArguments[i][j];
+					else temp_line = temp_line + ",#" + gathArguments[i][j];
+				}
+				temp_line = temp_line + ")";
+			}
+			temp_line = temp_line + ".";
+
+			outputFile << temp_line << std::endl;
+		}
+		else if(sp::startsWith(temp_line,"display")) break;
+		else outputFile << temp_line << std::endl;
+	}
+	inputFile.close();
+
+	//Add the defined fluents' rules
+	for(unsigned int i = 0; i < dfDef.size(); i++)
+	{
+		outputFile << dfDef[i] << std::endl;
+	}
+
+	//Add the p-state generating rules
+	for(unsigned int i = 0; i < dfGenRule.size(); i++)
+	{
+		outputFile << dfGenRule[i] << std::endl;
+	}
+
+	//Add the filter to display only the literals of interest
+	outputFile << "display" << std::endl;
+	for(unsigned int i = 0; i < gathElements.size(); i++)
+	{
+		std::string disp_str;
+		disp_str = "val("+gathElements[i]+"(";
+		for(unsigned int j = 0; j < gathArguments[i].size(); j++)
+		{
+			if(j == 0) disp_str = disp_str + "V" + std::to_string(j);
+			else disp_str = disp_str + ",V" + std::to_string(j);
+		}
+		disp_str = disp_str + "),true,0).";
+
+		outputFile << disp_str << std::endl;
+	}
+	outputFile.close();
+
+	//Generate the p-states answer-sets file
+	sp::shellCmd("java -jar "+std::string(PATH_TO_SPARC)+" "+cpFile+" -A > STATES_AS.txt");
+	//Extract the p-states from the answer-sets file
+	std::vector<sp::PState> extPS = sp::pstatesFromFile("STATES_AS.txt");
+
+	//From the whole set of p-states keep those with the largest length
+	int max_len = -1;
+	std::vector<sp::PState> largePS;
+	for(unsigned int i = 0; i < extPS.size(); i++) if(extPS[i].len() > max_len) max_len = extPS[i].len();
+	for(unsigned int i = 0; i < extPS.size(); i++) if(extPS[i].len() == max_len) largePS.push_back(extPS[i]);
+
+	//From the p-states with the largest length, for each definition in 'subStateDefs' extract sub-pstates
+	//that satisfy such definition
+	std::vector<std::vector<sp::PState>> outputAnswerSets;
+	for(unsigned int i = 0; i < subStateDefs.size(); i++)
+	{
+		std::vector<sp::PState> temp_as;
+		std::vector<std::string> temp_def;
+		temp_def.push_back(subStateDefs[i]);
+		for(unsigned int j = 0; j < largePS.size(); j++)
+		{
+			sp::PState temp_ps = sp::subPstate((*this),largePS[j],temp_def);
+			temp_as.push_back(temp_ps);
+		}
+		outputAnswerSets.push_back(temp_as);
+	}
+	//Always include the original whole Answer sets
+	outputAnswerSets.push_back(largePS);
+
+	return outputAnswerSets;
+}
 
 
 

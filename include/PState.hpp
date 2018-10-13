@@ -34,6 +34,7 @@ namespace sp
 			std::vector<std::string> LitNames;
 			std::vector<std::vector<std::string>> LitArgs;
 			std::vector<std::vector<std::vector<std::string>>> LitArgArgs;
+			std::vector<std::vector<std::vector<std::vector<std::string>>>> LitArgArgArgs;
 
 			/**
 			 * \brief This method is for obtaining the structure of the literals that constitute a state, from a string. If the method succeeds in extracting the literals' structure, these will be stored in the class' members 'LitNames', 'LitArgs' and 'LitArgArgs'. A valid literal is of the form 'lit_name(arg1,arg2(subarg1,subarg2),arg3)'. It is important to know that the PState class supports only literals that have at most subargs, that is, a literal's structure of the form 'lit_name(arg1(subarg1(subsubarg1)))' will not be extracted properly.

@@ -12,6 +12,7 @@ using namespace sp;
 
 int main(int argc, char** argv)
 {
+
 	//Load the Domain description via a SPARC file
 	string sparcFile("/home/zero/Dropbox/Tesis/SPARC-Learn/2pomdp/blocks-orig.sp");
 	DomainSort ds;
@@ -22,27 +23,27 @@ int main(int argc, char** argv)
 	defs.push_back("val(#inertial_f,true,X)");
 	vector<vector<PState>> all_states = ds.generateStates("#inertial_f",defs);
 	vector<PState> i_states = all_states[0];
-
-//Add the termination state absb
-i_states.push_back(PState("{absb}"));
-
+//
+////Add the termination state absb
+//i_states.push_back(PState("{absb}"));
+//
 	//Generate the list of actions
 	vector<Action> i_actions = ds.generateActions("#action");
 
 	//Generate the transitions the result from the non-deterministic excution
 	//of actions in i_actions over the states in i_states
 	vector<Transition> i_trans = ds.generateTransitions(i_states,i_actions,"#inertial_f");
-
+//
 //Debug
 cout << "#S:" << i_states.size() << endl;
 cout << "#A:" << i_actions.size() << endl;
 cout << "#T:" << i_trans.size() << endl;
-cout << "--------------------------------------" << endl;
-Pomdp p;
-vector<PState> Z;
-vector<Action> kA;
-vector<Action> termA;
-p.generatePomdp(i_states,i_actions,kA,termA,Z,i_trans,ds,"/home/zero/Desktop/pomdpfilename.txt");
+//cout << "--------------------------------------" << endl;
+//Pomdp p;
+//vector<PState> Z;
+//vector<Action> kA;
+//vector<Action> termA;
+//p.generatePomdp(i_states,i_actions,kA,termA,Z,i_trans,ds,"/home/zero/Desktop/pomdpfilename.txt");
 
 ////Temporal vector
 //vector<string> a_vec;

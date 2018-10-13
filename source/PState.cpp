@@ -15,10 +15,11 @@ bool sp::PState::extractPStateFromString(std::string psString)
 	{
 		//A state with no literals is a valid p-state
 		PStateLength = 0;
-		PStateString = "";
+		PStateString = "{}";
 		LitNames.clear();
 		LitArgs.clear();
 		LitArgArgs.clear();
+		LitArgArgArgs.clear();
 		return true;
 	}
 
@@ -26,49 +27,90 @@ bool sp::PState::extractPStateFromString(std::string psString)
 	std::string litsStr = psString.substr(1,psString.length()-2);
 
 	//Get vector of individual literals
-	std::vector<std::string> lits = splitStr(litsStr,",");
+	std::vector<std::string> lits = sp::splitStr(litsStr,",");
 
 	//Correct to get the tokens that correspond to the most outer-parentesis ones, i.e., ignore commas inside parentesis
-	lits = correctCommaSplit(lits);
+	lits = sp::correctCommaSplit(lits);
 
 	//Literals extraction from non-empty states
 	std::vector<std::string> litNames;
 	std::vector<std::vector<std::string>> litArgs;
 	std::vector<std::vector<std::vector<std::string>>> litArgArgs;
+	std::vector<std::vector<std::vector<std::vector<std::string>>>> litArgArgArgs;
 	for(unsigned int i = 0; i < lits.size(); i++)
 	{
 		int firstParentesis =  lits[i].find("(");
 		int lastParentesis = lits[i].rfind(")");
 
+		//This literal has no args, only its name
+		if(firstParentesis == -1)
+		{
+			litNames.push_back(lits[i]);
+			litArgs.push_back(std::vector<std::string>());
+			litArgArgs.push_back(std::vector<std::vector<std::string>>());
+			litArgArgArgs.push_back(std::vector<std::vector<std::vector<std::string>>>());
+			continue;
+		}
+
 		//The literal's name
 		std::string nameString = lits[i].substr(0,firstParentesis);
 
 		//The args' names
-		std::string argsStr = strBtwn(lits[i],firstParentesis,lastParentesis);
-		std::vector<std::string> args = splitStr(argsStr,",");
+		std::string argsStr = sp::strBtwn(lits[i],firstParentesis,lastParentesis);
+		std::vector<std::string> args = sp::splitStr(argsStr,",");
 		//Correct the comma split
-		args = correctCommaSplit(args);
+		args = sp::correctCommaSplit(args);
 		//Extract the args' names
 		std::vector<std::string> tempA;
 		std::vector<std::vector<std::string>> tempAA;
+		std::vector<std::vector<std::vector<std::string>>> tempAAA;
 		for(unsigned int j = 0; j < args.size(); j++)
 		{
 			int parIndex = args[j].find("(");
 			if(parIndex != -1)
 			{
+				//This argument has arguments
 				//Extraction of an argument's arguments
 				int fP = parIndex;
-				int lP = args[j].find(")");
+				int lP = args[j].rfind(")");
 				std::vector<std::string> argsOfArg = splitStr(strBtwn(args[j],fP,lP),",");
+				//Correct the comma split, just in case one of these args has args
+				argsOfArg = sp::correctCommaSplit(argsOfArg);
+				std::vector<std::string> temptempAA;
+				std::vector<std::vector<std::string>> temptempAAA;
+				for(unsigned int k = 0; k < argsOfArg.size(); k++)
+				{
+					int l_par = argsOfArg[k].find("(");
+					//This arg-arg has args
+					if(l_par != -1)
+					{
+						//Get the arg-arg-args
+						int r_par = argsOfArg[k].rfind(")");
+						std::string argargsStr = sp::strBtwn(argsOfArg[k],l_par,r_par);
+						std::vector<std::string> argsOfArgOfArg = sp::splitStr(argargsStr,",");
+						argsOfArgOfArg = sp::correctCommaSplit(argsOfArgOfArg);
+
+						//Save the arg-arg's name & its arg-arg-args
+						temptempAA.push_back(argsOfArg[k].substr(0,l_par));
+						temptempAAA.push_back(argsOfArgOfArg);
+					}
+					else //This arg-arg has no arguments
+					{
+						temptempAA.push_back(argsOfArg[k]);
+						temptempAAA.push_back(std::vector<std::string>());
+					}
+				}
 
 				tempA.push_back(args[j].substr(0,fP));
-				tempAA.push_back(argsOfArg);
+				tempAA.push_back(temptempAA);
+				tempAAA.push_back(temptempAAA);
 			}
 			else
 			{
-				//This agrument has no arguments
+				//This argument has no arguments
 				tempA.push_back(args[j]);
 				tempAA.push_back(std::vector<std::string>());
+				tempAAA.push_back(std::vector<std::vector<std::string>>());
 			}
 		}
 
@@ -76,6 +118,7 @@ bool sp::PState::extractPStateFromString(std::string psString)
 		litNames.push_back(nameString);
 		litArgs.push_back(tempA);
 		litArgArgs.push_back(tempAA);
+		litArgArgArgs.push_back(tempAAA);
 	}
 
 	//Save the extracted P-State
@@ -84,6 +127,7 @@ bool sp::PState::extractPStateFromString(std::string psString)
 	LitNames = litNames;
 	LitArgs = litArgs;
 	LitArgArgs = litArgArgs;
+	LitArgArgArgs = litArgArgArgs;
 
 	return true;
 }
@@ -101,6 +145,10 @@ void sp::PState::pstateDisplay() const
 				for(unsigned int k = 0; k < LitArgArgs[i][j].size(); k++)
 				{
 					std::cout << "\t\t" << LitArgArgs[i][j][k] << std::endl;
+					for(unsigned int l = 0; l < LitArgArgArgs[i][j][k].size(); l++)
+					{
+						std::cout << "\t\t\t" << LitArgArgArgs[i][j][k][l] << std::endl;
+					}
 				}
 			}
 		}
@@ -144,7 +192,8 @@ void sp::PState::debug() const
 bool sp::PState::equalsExcLastArg(sp::PState const &ps2) const
 {
 	//First make the comparison based on their 'PStateString' member
-	if(this->PStateString == ps2.PStateString) return true;
+	//which are required to be different
+	if(this->PStateString == ps2.PStateString) return false;
 
 	//Must have same amount of literals
 	if(this->PStateLength != ps2.PStateLength) return false;
@@ -177,36 +226,67 @@ bool sp::PState::equalsExcLastArg(sp::PState const &ps2) const
 					   (this->LitArgArgs[i][k].size() != ps2.LitArgArgs[j][k].size())) break;
 
 					//At least one of the last arg's sub-args must be different
+					bool breakout = false;
 					for(unsigned int l = 0; l < this->LitArgArgs[i][k].size(); l++)
 					{
-						if(this->LitArgArgs[i][k][l] != ps2.LitArgArgs[j][k][l])
+						//Check if sub-args differ in their name or amount of their sub-sub-args
+						if(this->LitArgArgs[i][k][l] != ps2.LitArgArgs[j][k][l] ||
+						   this->LitArgArgArgs[i][k][l].size() != ps2.LitArgArgArgs[j][k][l].size())
 						{
+							breakout = true;
 							break;
 						}
+
+						//Check if at least one pair of sub-sub-args differs
+						for(unsigned int m = 0; m < this->LitArgArgArgs[i][k][l].size(); m++)
+						{
+							if(this->LitArgArgArgs[i][k][l][m] != ps2.LitArgArgArgs[j][k][l][m])
+							{
+								breakout = true;
+								break;
+							}
+						}
+
+						if(breakout) break;
 					}
 
+					if(breakout) break;
 
 					allArgMatch = false;
 					break;
 				}
-
-				//Verify that the literals' argument correspond and have the same amount of sub-arguments
-				if((this->LitArgs[i][k] != ps2.LitArgs[j][k]) ||
-				   (this->LitArgArgs[i][k].size() != ps2.LitArgArgs[j][k].size()))
+				else
 				{
-					allArgMatch = false;
-					break;
-				}
-
-				//Verify that the sub-argguments match between the literals' arguments
-				for(unsigned int l = 0; l < this->LitArgArgs[i][k].size(); l++)
-				{
-					if(this->LitArgArgs[i][k][l] != ps2.LitArgArgs[j][k][l])
+					//Verify that the literals' argument correspond and have the same amount of sub-arguments
+					if((this->LitArgs[i][k] != ps2.LitArgs[j][k]) ||
+					   (this->LitArgArgs[i][k].size() != ps2.LitArgArgs[j][k].size()))
 					{
 						allArgMatch = false;
 						break;
 					}
+
+					//Verify that the sub-argguments match between the literals' arguments
+					for(unsigned int l = 0; l < this->LitArgArgs[i][k].size(); l++)
+					{
+						if(this->LitArgArgs[i][k][l] != ps2.LitArgArgs[j][k][l] ||
+						   this->LitArgArgArgs[i][k][l].size() != ps2.LitArgArgArgs[j][k][l].size())
+						{
+							allArgMatch = false;
+							break;
+						}
+
+						//Check that the sub-sub-args match
+						for(unsigned int m = 0; m < this->LitArgArgArgs[i][k][l].size(); m++)
+						{
+							if(this->LitArgArgArgs[i][k][l][m] != ps2.LitArgArgArgs[j][k][l][m])
+							{
+								allArgMatch = false;
+								break;
+							}
+						}
+					}
 				}
+
 
 				if(!allArgMatch) break;
 			}
@@ -250,7 +330,6 @@ bool sp::PState::equals(sp::PState const &ps2) const
 
 			//Both literals must have same amount of arguments
 			if(this->LitArgs[i].size() != ps2.LitArgs[j].size()) continue;
-
 			bool allArgMatch = true;
 			for(unsigned int k = 0; k < this->LitArgs[i].size(); k++)
 			{
@@ -262,14 +341,27 @@ bool sp::PState::equals(sp::PState const &ps2) const
 					break;
 				}
 
-				//Verify that the sub-argguments match between the literals' arguments
+				//Verify that the sub-arguments match between the literals' arguments
 				for(unsigned int l = 0; l < this->LitArgArgs[i][k].size(); l++)
 				{
-					if(this->LitArgArgs[i][k][l] != ps2.LitArgArgs[j][k][l])
+					if(this->LitArgArgs[i][k][l] != ps2.LitArgArgs[j][k][l] ||
+					   this->LitArgArgArgs[i][k][l].size() != ps2.LitArgArgArgs[j][k][l].size())
 					{
 						allArgMatch = false;
 						break;
 					}
+
+					//Verify that the sub-sub-arguments match
+					for(unsigned int m = 0; m < this->LitArgArgArgs[i][k][l].size(); m++)
+					{
+						if(this->LitArgArgArgs[i][k][l][m] != ps2.LitArgArgArgs[j][k][l][m])
+						{
+							allArgMatch = false;
+							break;
+						}
+					}
+
+					if(!allArgMatch) break;
 				}
 
 				if(!allArgMatch) break;
@@ -315,11 +407,23 @@ bool sp::PState::contains(sp::PState const &ps2) const
 					{
 						for(unsigned int l = 0; l < ps2.LitArgArgs[i][k].size(); l++)
 						{
-							if(ps2.LitArgArgs[i][k][l] != this->LitArgArgs[j][k][l])
+							if(ps2.LitArgArgs[i][k][l] != this->LitArgArgs[j][k][l] ||
+							   ps2.LitArgArgArgs[i][k][l].size() != this->LitArgArgArgs[j][k][l].size())
 							{
 								found_literal = false;
 								break;
 							}
+
+							for(unsigned int m = 0; m < ps2.LitArgArgArgs[i][k][l].size(); m++)
+							{
+								if(ps2.LitArgArgArgs[i][k][l][m] != this->LitArgArgArgs[j][k][l][m])
+								{
+									found_literal = false;
+									break;
+								}
+							}
+
+							if(!found_literal) break;
 						}
 
 						if(!found_literal) break;

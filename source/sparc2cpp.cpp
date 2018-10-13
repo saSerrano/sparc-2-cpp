@@ -264,24 +264,60 @@ bool sp::checkDef(sp::DomainSort const &ds, std::string const &def, std::string 
 
 sp::PState sp::subPstate(sp::DomainSort const &ds, sp::PState const &ps, std::vector<std::string> const &defs)
 {
+	/*
+
+	INVALID DEFINITIONS NOTE: There are 4 type of syntaxis errors that make an invalid definition.
+
+		i) Empty parenthesis: val(on(),true,3)
+
+		ii) Pair of parenthesis preceeded by empty string: val(on(b0,t),(t,b2),true,1)
+
+		iii) Parenthesis that are not enclosed: val(can_test)on(b1,t)),true,0)
+
+		iv) sub-sub-args with arguments: There can be at most 3 nested parenthesis
+			ok:     val(can_test(loc(rb1,c0),true),true,1)
+			not ok: val(can_test(loc(rb1,c0(t,false)),true),true,1)
+
+	*/
+
 	//Output set of literals
 	sp::PState sub_pstate;
 
 	//Verify that 'ds' has loaded a domain and 'ps'
 	if(!ds.fileIsLoaded()) return sub_pstate;
 	if(ps.len() == -1) return sub_pstate;
+	if(ps.PStateString == "{}")
+	{
+		sub_pstate.set("{}");
+		return sub_pstate;
+	}
 
-	//Iterate over the dfinitions in 'defs'
+	// i-th def-name
 	std::vector<int> addedLits;
 	std::vector<int>::iterator it;
 	for(unsigned int i = 0; i < defs.size(); i++)
 	{
+		int l_count = sp::countOcc(defs[i],"(");
+		int r_count = sp::countOcc(defs[i],")");
 		int l_par = defs[i].find("(");
 		int r_par = defs[i].rfind(")");
 
-		if((l_par == -1 && r_par != -1) || (l_par != -1 && r_par == -1)) continue;//Invalid definition
+		//Check for invalid definition
+		if((l_par == -1 && r_par != -1)   || 
+		   (l_par != -1 && r_par == -1)   || 
+		   (r_par != -1 && l_par > r_par) ||
+		   (l_count != r_count))
+		{
+			continue;
+		}
 		else if(l_par == -1 && r_par == -1)
 		{
+			//Check for an empty def-name
+			if(sp::stripSpaces(defs[i]) == "")
+			{
+				continue;
+			}
+
 			//A definition that consists of the literal's name only
 			for(unsigned int j = 0; j < ps.LitNames.size(); j++)
 			{
@@ -292,6 +328,7 @@ sp::PState sp::subPstate(sp::DomainSort const &ds, sp::PState const &ps, std::ve
 					sub_pstate.LitNames.push_back(ps.LitNames[j]);
 					sub_pstate.LitArgs.push_back(ps.LitArgs[j]);
 					sub_pstate.LitArgArgs.push_back(ps.LitArgArgs[j]);
+					sub_pstate.LitArgArgArgs.push_back(ps.LitArgArgArgs[j]);
 
 					//Save 'ps' literal's index, so it is not added more than once
 					addedLits.push_back(j);
@@ -301,39 +338,120 @@ sp::PState sp::subPstate(sp::DomainSort const &ds, sp::PState const &ps, std::ve
 		else
 		{
 			//Extract the components of the definition 'defs[i]'
-			//A definition that consists of the literal's name, its arguments and possibly its sub-args
+			//A definition that consists of the literal's name, its arguments and possibly its sub-args and
+			//sub-sub-args
 			std::vector<std::string> comps = sp::splitStr(sp::strBtwn(defs[i],l_par,r_par),",");
 			comps = sp::correctCommaSplit(comps);
+			std::string def_name = defs[i].substr(0,l_par); 			// i-th def-name
+			std::vector<std::string> def_args;					// i-th def-args
+			std::vector<std::vector<std::string>> def_arg_args;			// i-th def-sub-args
+			std::vector<std::vector<std::vector<std::string>>> def_arg_arg_args;	// i-th def-sub-sub-args
 
-			std::string def_name = defs[i].substr(0,l_par);
-			std::vector<std::string> def_args;
-			std::vector<std::vector<std::string>> def_arg_args;
-			for(unsigned int j = 0; j < comps.size(); j++)
+			//Check for an invalid def-name
+			if((sp::stripSpaces(def_name) == "") || (def_name.find(")") != -1))
+			{
+				continue;
+			}
+
+			//Get the argument components of the i-th definition
+			bool i_def_is_invalid = false;
+			for(unsigned int j = 0; j < comps.size(); j++) // j-th def-arg
 			{
 				int lp_count = sp::countOcc(comps[j],"(");
 				int rp_count = sp::countOcc(comps[j],")");
 				int lp_pos = comps[j].find("(");
 				int rp_pos = comps[j].rfind(")");
 
-				//Each argument can have at most a pair of parentesis
-				if(lp_count > 1 || rp_count > 1 || lp_count != rp_count || lp_pos > rp_pos) break;
+				//Each argument must be valid for the i-th definition to be valid
+				if((lp_count != rp_count) || (lp_pos > rp_pos) || (sp::stripSpaces(comps[j]) == ""))
+				{
+					i_def_is_invalid = true;
+					break;
+				}
 
+				// j-th def-arg has sub-args
 				if(lp_pos > -1)
 				{
-					//This arguments has arguments
+					//Check for an empty def-arg
+					if((sp::stripSpaces(comps[j].substr(0,lp_pos)) == "") || (comps[j].substr(0,lp_pos).find(")") != -1))
+					{
+						i_def_is_invalid = true;
+						break;
+					}
+
 					std::vector<std::string> temp_arg_args;
 					temp_arg_args = sp::splitStr(sp::strBtwn(comps[j],lp_pos,rp_pos),",");
+					temp_arg_args = sp::correctCommaSplit(temp_arg_args);
+					std::vector<std::string> tt_arg_args;
+					std::vector<std::vector<std::string>> tt_arg_arg_args;
+					for(unsigned int k = 0; k < temp_arg_args.size(); k++) // k-th def-sub-arg
+					{
+						int llp_count = sp::countOcc(temp_arg_args[k],"(");
+						int rrp_count = sp::countOcc(temp_arg_args[k],")");
+						int llp = temp_arg_args[k].find("(");
+						int rrp = temp_arg_args[k].rfind(")");
 
-					def_args.push_back(comps[j].substr(0,lp_pos));
-					def_arg_args.push_back(temp_arg_args);
+						//Each sub-arg must be valid for the i-th definition to be valid
+						if((llp_count != rrp_count) || (llp > rrp) || (sp::stripSpaces(temp_arg_args[k]) == ""))
+						{
+							i_def_is_invalid = true;
+							break;
+						}
+
+						// k-th sub-arg has args
+						if(llp > -1)
+						{
+							//Check for an invalid def-sub-arg
+							if((sp::stripSpaces(temp_arg_args[k].substr(0,llp)) == "") || (temp_arg_args[k].substr(0,llp).find(")") != -1))
+							{
+								i_def_is_invalid = true;
+								break;
+							}
+
+							std::vector<std::string> ttt_aaa = sp::splitStr(sp::strBtwn(temp_arg_args[k],llp,rrp),",");
+							ttt_aaa = sp::correctCommaSplit(ttt_aaa);
+							for(unsigned int l = 0; l < ttt_aaa.size(); l++) // l-th def-sub-sub-arg
+							{
+								int lllp = ttt_aaa[l].find("(");
+								int rrrp = ttt_aaa[l].rfind(")");
+
+								//Each sub-sub-arg must be valid for the i-th definition to be valid
+								//Each sub-sub-arg cannot have parenthesis
+								if((lllp != -1) || (rrrp != -1) || (sp::stripSpaces(ttt_aaa[l]) == ""))
+								{
+									i_def_is_invalid = true;
+									break;
+								}
+							}
+
+							if(i_def_is_invalid) break;
+
+							tt_arg_args.push_back(temp_arg_args[k].substr(0,llp));
+							tt_arg_arg_args.push_back(ttt_aaa);
+						}
+						else // k-th sub-arg has no args
+						{
+							tt_arg_args.push_back(temp_arg_args[k]);
+							tt_arg_arg_args.push_back(std::vector<std::string>());
+						}
+					}
+
+					if(i_def_is_invalid) break;
+
+					def_args.push_back(comps[j].substr(0,lp_pos)); // j-th def-arg
+					def_arg_args.push_back(tt_arg_args);
+					def_arg_arg_args.push_back(tt_arg_arg_args);
 				}
-				else
+				else //This argument does not have arguments
 				{
-					//This argument does not have arguments
 					def_args.push_back(comps[j]);
 					def_arg_args.push_back(std::vector<std::string>());
+					def_arg_arg_args.push_back(std::vector<std::vector<std::string>>());
 				}
 			}
+
+			//Avoid evaluating with respect to invalid
+			if(i_def_is_invalid) continue;
 
 			//From the extracted definition, evaluate each literal from 'ps'
 			for(unsigned int j = 0; j < ps.LitNames.size(); j++)
@@ -349,7 +467,7 @@ sp::PState sp::subPstate(sp::DomainSort const &ds, sp::PState const &ps, std::ve
 					//Verify that the i-th definition and j-th literal have the same amount of args
 					if(def_args.size() != ps.LitArgs[j].size()) continue;
 
-					//Check each literal's argument and sub-argument
+					//Check each literal's arguments, sub-arguments and sub-sub-arguments
 					bool allArgsCheck = true;
 					for(unsigned int k = 0; k < ps.LitArgs[j].size(); k++)
 					{
@@ -364,14 +482,27 @@ sp::PState sp::subPstate(sp::DomainSort const &ds, sp::PState const &ps, std::ve
 									break;
 								}
 
-								//Check each sub-arg of the k-th argument
+								//Check the l-th sub-arg
 								for(unsigned int l = 0; l < ps.LitArgArgs[j][k].size(); l++)
 								{
-									if(!sp::checkDef(ds,def_arg_args[k][l],ps.LitArgArgs[j][k][l]))
+									if(!sp::checkDef(ds,def_arg_args[k][l],ps.LitArgArgs[j][k][l]) ||
+									   def_arg_arg_args[k][l].size() != ps.LitArgArgArgs[j][k][l].size())
 									{
 										allArgsCheck = false;
 										break;
 									}
+
+									//Check the m-th sub-sub-arg
+									for(unsigned int m = 0; m < ps.LitArgArgArgs[j][k][l].size(); m++)
+									{
+										if(!sp::checkDef(ds,def_arg_arg_args[k][l][m],ps.LitArgArgArgs[j][k][l][m]))
+										{
+											allArgsCheck = false;
+											break;
+										}
+									}
+
+									if(!allArgsCheck) break;
 								}
 
 								if(!allArgsCheck) break;
@@ -391,6 +522,7 @@ sp::PState sp::subPstate(sp::DomainSort const &ds, sp::PState const &ps, std::ve
 						sub_pstate.LitNames.push_back(ps.LitNames[j]);
 						sub_pstate.LitArgs.push_back(ps.LitArgs[j]);
 						sub_pstate.LitArgArgs.push_back(ps.LitArgArgs[j]);
+						sub_pstate.LitArgArgArgs.push_back(ps.LitArgArgArgs[j]);
 
 						//Save 'ps' literal's index, so it is not added more than once
 						addedLits.push_back(j);
@@ -405,31 +537,44 @@ sp::PState sp::subPstate(sp::DomainSort const &ds, sp::PState const &ps, std::ve
 	std::string ps_string("{");
 	for(unsigned int i = 0; i < sub_pstate.LitNames.size(); i++)
 	{
-		if(i > 0) ps_string = ps_string + ",";
+		if(i > 0) ps_string += ",";
 
-		ps_string = ps_string + sub_pstate.LitNames[i];
-		if(sub_pstate.LitArgs[i].size() > 0) ps_string = ps_string + "(";
-
-		for(unsigned int j = 0; j < sub_pstate.LitArgs[i].size(); j++)
+		ps_string += sub_pstate.LitNames[i];
+		if(sub_pstate.LitArgs[i].size() > 0)
 		{
-			if(j > 0) ps_string = ps_string + ",";
-
-			ps_string = ps_string + sub_pstate.LitArgs[i][j];
-			if(sub_pstate.LitArgArgs[i][j].size() > 0) ps_string = ps_string + "(";
-
-			for(unsigned int k = 0; k < sub_pstate.LitArgArgs[i][j].size(); k++)
+			ps_string += "(";
+			for(unsigned int j = 0; j < sub_pstate.LitArgs[i].size(); j++)
 			{
-				if(k > 0) ps_string = ps_string + ",";
+				if(j > 0) ps_string += ",";
 
-				ps_string = ps_string + sub_pstate.LitArgArgs[i][j][k];
+				ps_string += sub_pstate.LitArgs[i][j];
+				if(sub_pstate.LitArgArgs[i][j].size() > 0)
+				{
+					ps_string += "(";
+					for(unsigned int k = 0; k < sub_pstate.LitArgArgs[i][j].size(); k++)
+					{
+						if(k > 0) ps_string += ",";
+
+						ps_string += sub_pstate.LitArgArgs[i][j][k];
+						if(sub_pstate.LitArgArgArgs[i][j][k].size() > 0)
+						{
+							ps_string += "(";
+							for(unsigned int l = 0; l < sub_pstate.LitArgArgArgs[i][j][k].size(); l++)
+							{
+								if(l > 0) ps_string += ",";
+
+								ps_string += sub_pstate.LitArgArgArgs[i][j][k][l];
+							}
+							ps_string += ")";
+						}
+					}
+					ps_string += ")";
+				}
 			}
-
-			if(sub_pstate.LitArgArgs[i][j].size() > 0) ps_string = ps_string + ")";
+			ps_string += ")";
 		}
-
-		if(sub_pstate.LitArgs[i].size() > 0) ps_string = ps_string + ")";
 	}
-	ps_string = ps_string + "}";
+	ps_string += "}";
 	sub_pstate.PStateString = ps_string;
 
 	//Save in 'PStateLength' the amount of literals sub_pstate has
