@@ -12,32 +12,43 @@ using namespace sp;
 
 int main(int argc, char** argv)
 {
-
 	//Load the Domain description via a SPARC file
-	string sparcFile("/home/zero/Dropbox/Tesis/SPARC-Learn/2pomdp/blocks-orig.sp");
+	string sparcFile("/home/zero/Dropbox/Tesis/SPARC-Learn/2pomdp/rob-navig-orig.sp");
 	DomainSort ds;
 	ds.loadFile(sparcFile);
 
 	//Generate all the states, in this case only inertial fluents are considered
 	vector<string> defs;
-	defs.push_back("val(#inertial_f,true,X)");
-	vector<vector<PState>> all_states = ds.generateStates("#inertial_f",defs);
-	vector<PState> i_states = all_states[0];
-//
-////Add the termination state absb
-//i_states.push_back(PState("{absb}"));
-//
+	defs.push_back("val(#ink_f,true,X)");
+	defs.push_back("val(#ik_f,true,X)");
+	vector<vector<PState>> all_states = ds.generateSZ("#non_static_f","#ik_f",defs);
+	vector<PState> S = all_states[0];
+	vector<PState> Z = all_states[1];
+
 	//Generate the list of actions
-	vector<Action> i_actions = ds.generateActions("#action");
+	vector<Action> NKA = ds.generateActions("#nk_a",vector<PState>());
+	vector<Action> KA = ds.generateActions("#k_a",S);
+
+cout << "STATES" << endl;
+for(unsigned int i = 0; i < S.size(); i++) cout << S[i].str() << endl;
+
+cout << "OBSERVATIONS" << endl;
+for(unsigned int i = 0; i < Z.size(); i++) cout << Z[i].str() << endl;
+
+cout << "NK - ACTIONS" << endl;
+for(unsigned int i = 0; i < NKA.size(); i++) cout << NKA[i].str() << endl;
+
+cout << "K - ACTIONS" << endl;
+for(unsigned int i = 0; i < KA.size(); i++) cout << KA[i].str() << endl;
 
 	//Generate the transitions the result from the non-deterministic excution
 	//of actions in i_actions over the states in i_states
-	vector<Transition> i_trans = ds.generateTransitions(i_states,i_actions,"#inertial_f");
+//	vector<Transition> i_trans = ds.generateTransitions(S,i_actions,"#inertial_f");
 //
 //Debug
-cout << "#S:" << i_states.size() << endl;
-cout << "#A:" << i_actions.size() << endl;
-cout << "#T:" << i_trans.size() << endl;
+//cout << "#S:" << S.size() << endl;
+//cout << "#A:" << i_actions.size() << endl;
+//cout << "#T:" << i_trans.size() << endl;
 //cout << "--------------------------------------" << endl;
 //Pomdp p;
 //vector<PState> Z;

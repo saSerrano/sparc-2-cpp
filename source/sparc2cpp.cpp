@@ -482,27 +482,41 @@ sp::PState sp::subPstate(sp::DomainSort const &ds, sp::PState const &ps, std::ve
 									break;
 								}
 
-								//Check the l-th sub-arg
+								//Check the k-th argument's sub-args
 								for(unsigned int l = 0; l < ps.LitArgArgs[j][k].size(); l++)
 								{
-									if(!sp::checkDef(ds,def_arg_args[k][l],ps.LitArgArgs[j][k][l]) ||
-									   def_arg_arg_args[k][l].size() != ps.LitArgArgArgs[j][k][l].size())
+									//Check the l-th sub-argument
+									if(sp::checkDef(ds,def_arg_args[k][l],ps.LitArgArgs[j][k][l]))
+									{
+										if(def_arg_arg_args[k][l].size() > 0)
+										{
+											if(def_arg_arg_args[k][l].size() != ps.LitArgArgArgs[j][k][l].size())
+											{
+												allArgsCheck = false;
+												break;
+											}
+
+											//Check the l-th sub-argument's sub-sub-args
+											for(unsigned int m = 0; m < ps.LitArgArgArgs[j][k][l].size(); m++)
+											{
+												//Check the m-th sub-sub-argument
+												if(!sp::checkDef(ds,def_arg_arg_args[k][l][m],ps.LitArgArgArgs[j][k][l][m]))
+												{
+													allArgsCheck = false;
+													break;
+												}
+											}
+
+											if(!allArgsCheck) break;
+
+										}
+
+									}
+									else
 									{
 										allArgsCheck = false;
 										break;
 									}
-
-									//Check the m-th sub-sub-arg
-									for(unsigned int m = 0; m < ps.LitArgArgArgs[j][k][l].size(); m++)
-									{
-										if(!sp::checkDef(ds,def_arg_arg_args[k][l][m],ps.LitArgArgArgs[j][k][l][m]))
-										{
-											allArgsCheck = false;
-											break;
-										}
-									}
-
-									if(!allArgsCheck) break;
 								}
 
 								if(!allArgsCheck) break;

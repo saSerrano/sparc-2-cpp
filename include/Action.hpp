@@ -27,8 +27,10 @@ namespace sp
 	class Action
 	{
 		private:
+			std::string WholeAction;
 			std::vector<std::string> ActionNames;
 			std::vector<std::vector<std::string>> ActionArgs;
+			std::vector<std::vector<std::vector<std::string>>> ActionArgArgs;
 			int TimeStamp;
 
 			/**
@@ -74,6 +76,12 @@ namespace sp
 			 * \return Returns the value of TimeStamp.
 			*/
 			int step() const;
+
+			/**
+			 * \brief This method is for checking all the individual actions that constitute this object, in the form of a string and using the 'occurs(#action,#step)' notation.
+			 * \return Returns the value of WholeAction.
+			*/
+			std::string str() const;
 
 			/**
 			 * \brief This method is for checking if the Action object from which it is invoked has the same set of actions as the input Action a, regardless of their time stamps.
