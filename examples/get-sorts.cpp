@@ -12,6 +12,33 @@ using namespace sp;
 
 int main(int argc, char** argv)
 {
+vector<string> aa;
+vector<string> ss;
+vector<string> oo;
+
+aa.push_back("listen");
+aa.push_back("open-left");
+aa.push_back("open-right");
+
+ss.push_back("tiger-left");
+ss.push_back("tiger-right");
+
+oo.push_back("tiger-left");
+oo.push_back("tiger-right");
+
+Pomdp pp;
+tuple<vector<int>,vector<string>> stats;
+stats = pp.getStats("/home/zero/code/SPARC-2-CPP/bin/robot-stats.txt",aa,ss,oo);
+for(unsigned int i = 0; i < get<0>(stats).size(); i++)
+{
+	cout << "----------------------------" << endl;
+	cout << "Action index: " << get<0>(stats)[i] << endl;
+	cout << get<1>(stats)[i] << endl;
+}
+
+return 0;
+//---------------------------------------------------------------------------------
+
 	//Load the Domain description via a SPARC file
 	string sparcFile("/home/zero/Dropbox/Tesis/SPARC-Learn/2pomdp/rob-navig-orig.sp");
 	DomainSort ds;
@@ -26,7 +53,7 @@ int main(int argc, char** argv)
 	vector<PState> Z = all_states[1];
 
 	//Generate the list of actions
-	vector<Action> NKA = ds.generateActions("#nk_a",vector<PState>());
+	vector<Action> NKA = ds.generateActions("#nk_a",S);
 	vector<Action> KA = ds.generateActions("#k_a",S);
 
 cout << "STATES" << endl;
@@ -43,58 +70,38 @@ for(unsigned int i = 0; i < KA.size(); i++) cout << KA[i].str() << endl;
 
 	//Generate the transitions the result from the non-deterministic excution
 	//of actions in i_actions over the states in i_states
-//	vector<Transition> i_trans = ds.generateTransitions(S,i_actions,"#inertial_f");
-//
-//Debug
-//cout << "#S:" << S.size() << endl;
-//cout << "#A:" << i_actions.size() << endl;
-//cout << "#T:" << i_trans.size() << endl;
-//cout << "--------------------------------------" << endl;
-//Pomdp p;
-//vector<PState> Z;
-//vector<Action> kA;
-//vector<Action> termA;
-//p.generatePomdp(i_states,i_actions,kA,termA,Z,i_trans,ds,"/home/zero/Desktop/pomdpfilename.txt");
+	vector<Transition> T_trans = ds.generateTransitions(S,NKA,"#ink_f");
+	vector<Transition> O_trans = ds.generateTransitions(S,KA,"#ik_f");
 
-////Temporal vector
-//vector<string> a_vec;
-//
-////Debugging Pomdp class
-//vector<PState> ss;
-//vector<Action> nka;
-//vector<Action> ka;
-//vector<PState> zz;
-//vector<Transition> tt;
-//DomainSort ds;
-//string pf("/home/zero/Desktop/pomdpfilename.txt");
-//
-////S
-//ss.push_back(PState("{val(on(b0,b1),true,1)}"));
-//ss.push_back(PState("{val(on(b1,table),true,2)}"));
-//ss.push_back(PState("{val(on(b0,b1),true,3),val(on(b2,b0),true,3)}"));
-//
-////nkA
-//a_vec.push_back("occurs(put(b0,table),0)");
-//a_vec.push_back("occurs(put(b1,table),0)");
-//nka.push_back(a_vec);
-//a_vec.clear();
-//a_vec.push_back("occurs(put(b2,b0),1)");
-//nka.push_back(a_vec);
-//
-////kA
-//a_vec.clear();
-//a_vec.push_back("occurs(sense_loc(b1),0)");
-//ka.push_back(a_vec);
-//a_vec.clear();
-//a_vec.push_back("occurs(sense_loc(b2),1)");
-//ka.push_back(a_vec);
-//
-////Z
-//zz.push_back(PState("{val(seen(b0,b1),true,1)}"));
-//zz.push_back(PState("{val(seen(b1,table),true,2)}"));
-//
-//Pomdp p;
-//p.generatePomdp(ss,nka,ka,zz,tt,ds,pf);
+cout << "############################################################" << endl;
+cout << "T - TRANSITIONS" << endl;
+for(unsigned int i = 0; i < T_trans.size(); i++)
+{
+	T_trans[i].debug();
+	cout << "------------------------------------------------" << endl;
+}
+cout << "############################################################" << endl;
+cout << "O - TRANSITIONS" << endl;
+for(unsigned int i = 0; i < O_trans.size(); i++)
+{
+	O_trans[i].debug();
+	cout << "------------------------------------------------" << endl;
+}
+
+	//Create the execution-terminating actions
+	vector<string> ttt;
+	ttt.push_back("occurs(finish,0)");
+	Action ta(ttt);
+	vector<Action> termA;
+	termA.push_back(ta);
+
+	//Concatenate Transition vectors
+	vector<Transition> TO_trans;
+	TO_trans.insert(TO_trans.end(),T_trans.begin(),T_trans.end());
+	TO_trans.insert(TO_trans.end(),O_trans.begin(),O_trans.end());
+
+	Pomdp p;
+	p.generatePomdp(S,Z,NKA,KA,termA,TO_trans,ds,"model.pomdp","stats.txt");
 
 	return 0;
 }

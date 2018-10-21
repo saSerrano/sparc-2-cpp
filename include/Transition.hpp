@@ -14,6 +14,7 @@
 #include <PState.hpp>
 #include <Action.hpp>
 #include <DomainSort.hpp>
+#include <Pomdp.hpp>
 
 #include <string>
 #include <vector>
@@ -35,6 +36,16 @@ namespace sp
 			int IndexPs1;
 			Action SetofActions;
 			int IndexAction;
+
+			friend bool Pomdp::generatePomdp(std::vector<PState> &S, 
+						      std::vector<PState> &Z, 
+						      std::vector<Action> const &nkA, 
+						      std::vector<Action> const &kA, 
+						      std::vector<Action> const &termA, 
+						      std::vector<Transition> &T, 
+						      DomainSort const &ds, 
+						      std::string const &pomdpFile,
+						      std::string const &statFile);
 
 		public:
 
@@ -126,6 +137,7 @@ namespace sp
 
 			int iA() const;
 
+			static void index(std::vector<Transition> &T, std::vector<PState> const &S, std::vector<Action> const &A);
 	};
 }
 

@@ -65,13 +65,14 @@ namespace sp
 			friend PState subPstate(DomainSort const &ds, PState const &ps, std::vector<std::string> const &defs);
 
 			friend bool Pomdp::generatePomdp(std::vector<PState> &S, 
+						      std::vector<PState> &Z, 
 						      std::vector<Action> const &nkA, 
 						      std::vector<Action> const &kA, 
 						      std::vector<Action> const &termA, 
-						      std::vector<PState> &Z, 
-						      std::vector<Transition> const &T, 
+						      std::vector<Transition> &T, 
 						      DomainSort const &ds, 
-						      std::string const &pomdpFile);
+						      std::string const &pomdpFile,
+						      std::string const &statFile);
 
 		public:
 
@@ -147,6 +148,7 @@ namespace sp
 			/**
 			 * \brief This method generates a vector of instances of actions, from those defined and in the sort structure loaded from the SPARC file. This method will start looking for actions from the sort rootGenSort and will go downwards form there. Also, in order for an action to be instantiated, it must have extactly 1 causal law that describes its effects. As future improvements, we'd like to extend this method to support several causal laws for the same action.
 			 * \param rootGenSort The root sort from which this method will start looking for actions downwards. This string must begin with '#', followed by the name of the root sort.
+			 * \param rootGenSort A vector of states that are inserted in the SPARC file along with the choice-rule that generates the actios. This is used for the cases when actions can only be executed with a given state.
 			 * \return Returns a vector of Action objects, one for each generated action. All these actions have for time-stamp 0.
 			*/
 			std::vector<Action> generateActions(std::string const &rootGenSort, std::vector<PState> const &S) const;

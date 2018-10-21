@@ -1051,325 +1051,6 @@ std::vector<std::vector<sp::PState>> sp::DomainSort::generateSZ(std::string cons
 	return outputAnswerSets;
 }
 
-std::vector<sp::Transition> sp::DomainSort::generateTransitions(std::vector<sp::PState> const &setS0, std::vector<sp::Action> &setA, std::string const &rootDisplaySort)
-{
-	/*
-
-	This method assumes that the SPARC file loaded to generate this DomainSort:
-
-	 - For each action, it has a defined fluent that defines the set of possible outcomes
-	   an action can result in. This fluent is defined by the user, and must 
-
-			defined fluent for possible outcome:
-
-				actionname_pos_outcome(#arg1,#arg2,...)
-
-	The list of args of this def. fluent must match those of the inertial fluent the action
-	modifies. Also, the first argument of the inertial and defined fluent, must be of the
-	same sort than the action, for instance,
-
-			inertial fluent: location(#robot,#cell)
-			defined fluent: move_left_pos_outcome(#robot,#cell)
-			action: move_left(#robot)
-
-	Thus, this method does not verifies if the the correspondant defined fluent for each
-	action actually exists, it is responsability of the SPARC coder to provide definition
-	of these defined fluents.
-
-	*/
-
-	/*
-
-	* ISSUES WITH NON-DETERMINISTIC CAUSAL LAWS
-
-	When a causal law is being extended to its non-deterministic version, a defined fluent 
-	is created for the purpose of defining the set of possible outcomes for the particular 
-	occurrences of the action.
-
-	Once this defined fluent has been created, there are two sets of variables that are of 
-	our particular interest:
-		- The variables in the head of the causal law (set A)
-		- The variables that are parameters of the action (set B)
-
-	It is clear that the variables in the fluent that is a result of executing the action 
-	and the variables of the defined fluent must have a 1-to-1 correspondance. However, it 
-	is not obvious the way the varibles from set A and set B relate to each other.
-
-	In order for a system to automatically generate transitions of states using non-deterministic 
-	causal laws (with choice rules), it is necessary to homogenize the way causal laws are written. 
-	By homogenizing causal law's structures, we provide a standard rule on the correspondance of 
-	variables in set A and set B.
-
-	As an attempt to homogenize causal laws, we provide a standard that described as follows:
-
-	  i) The list of input parameters of an action and the fluent it modifies, must be share 
-	the first type of input parameter, therefore, they can have different lists of input 
-	parameters. For instance,
-
-					location(#robot,#cell) and move_left(#robot)
-
-	 ii) All inertial fluents (those modified by actions) are interpreted as properties of an 
-	object. In our homogenization, the object this properties describe is always the first 
-	variable of the fluent, that is,
-
-					Property(Object,Prop_param1,Prop_param1,...)
-
-	iii) When generating a non-deterministic causal law, the correspondance between variables 
-	of set A and those of set B, is defined only by a 1-to-1 correspondance between the first 
-	parameter of A and B. The rest of the parameters are completely unrelated. For instance,
-
-	Example 1.
-	{val(on(B,V0),true,I+1) : val(poss_outcome_put(B,V0),true,I)} :- I < n, occurs(put(B,L),I).
-
-	Example 2.
-	{val(location(R,V0),true,I+1) : val(poss_outcome_move_left(R,V0),true,I)} :- I < n, occurs(move_left(R),I).
-
-	*/
-
-	//Vector with hold the generated transitions
-	std::vector<sp::Transition> outputTrans;
-
-	//Initial checking on input parameters
-	if(!FileIsLoaded) return outputTrans;
-	if(setS0.size() == 0) return outputTrans;
-	if(setA.size() == 0) return outputTrans;
-	if(rootDisplaySort.length() <= 1) return outputTrans;
-	if(!sp::startsWith(rootDisplaySort,"#")) return outputTrans;
-	int disp_root_index = -1;
-	for(unsigned int i = 0; i < Sorts.size(); i++)
-	{
-		if(rootDisplaySort.substr(1,-1) == Sorts[i])
-		{
-			disp_root_index = i;
-			break;
-		}
-	}
-	if(disp_root_index == -1) return outputTrans;
-
-	//Create a copy file from 'SourceFile'
-	std::vector<std::string> path_vec = sp::splitStr(SourceFile,"/");
-	int last_index = path_vec.size() - 1;
-	std::vector<std::string> temp_vec = sp::splitStr(path_vec[last_index],".");
-	std::string cpFile =  temp_vec[0] + "_GEN_TRANS.sp";
-
-	//Replace the causal laws by their non-deterministic version
-	std::ifstream inputFile;
-	std::ofstream outputFile;
-	inputFile.open(SourceFile,std::ifstream::in);
-	outputFile.open(cpFile,std::ofstream::out);
-	std::string temp_line;
-	int ln_counter = 0;
-	int cl_counter = 0;
-	while(std::getline(inputFile,temp_line))
-	{
-		if(CausalLawStartLines.size() > 0)
-		{
-			//Look for the beggining of causal laws
-			if(ln_counter == CausalLawStartLines[cl_counter])
-			{
-				//Ignore the lines that correspond a causal law
-				for(int i = 0; i < CausalLawLengths[cl_counter]-1; i++)
-				{
-					std::getline(inputFile,temp_line);
-					ln_counter++;
-				}
-
-				//Generate the non-determinitsic causal law
-				std::string ndcl_str("1{val(");
-				ndcl_str += CausalHeadFluents[cl_counter]+"(X";
-				for(int i = 1; i < CausalHeadFluentsArgs[cl_counter].size(); i++)
-					ndcl_str += (",V" + std::to_string(i));
-				ndcl_str += ("),true,I+1):");
-				ndcl_str += ("val(" + CausalBodyActions[cl_counter] + "_pos_outcome(X");
-				for(unsigned int i = 1; i < CausalHeadFluentsArgs[cl_counter].size(); i++)
-					ndcl_str += (",V" + std::to_string(i));
-				ndcl_str += ("),true,I)}1:-\n\t");
-				for(unsigned int i = 0; i < CausalBodyOthers[cl_counter].size(); i++)
-					ndcl_str += (CausalBodyOthers[cl_counter][i] + ",\n\t");
-				ndcl_str += ("occurs(" + CausalBodyActions[cl_counter] + "(X");
-				for(int i = 1; i < CausalBodyActionsArgs[cl_counter].size(); i++)
-					ndcl_str += (",X" + std::to_string(i));
-				ndcl_str += "),I).";
-				outputFile << ndcl_str << std::endl;
-
-				//Increment counter to replace the next causal law
-				cl_counter++;
-			}
-			else if(sp::startsWith(temp_line,"display")) break;
-			else outputFile << temp_line << std::endl;
-		}
-		else if(sp::startsWith(temp_line,"display")) break;
-		else outputFile << temp_line << std::endl;
-
-		ln_counter++;
-	}
-	inputFile.close();
-	outputFile.close();
-
-//debug
-return outputTrans;
-
-	//For each state and each action generate a single string, that will be re-used
-	//when adding them to a SPARC FILE
-	std::vector<std::string> states_list;
-	std::vector<std::string> actions_list;
-	for(unsigned int i = 0; i < setS0.size(); i++)
-	{
-		std::string state_str("");
-		//Write the i-th state's literals
-		for(unsigned int k = 0; k < setS0[i].LitNames.size(); k++)
-		{
-			std::string lit_str("");
-			lit_str += (setS0[i].LitNames[k] + "(");
-			for(unsigned int l = 0; l < setS0[i].LitArgs[k].size(); l++)
-			{
-				if(l > 0) lit_str += ",";
-				lit_str += setS0[i].LitArgs[k][l];
-				if(setS0[i].LitArgArgs[k][l].size() > 0) lit_str += "(";
-				for(unsigned int m = 0; m < setS0[i].LitArgArgs[k][l].size(); m++)
-				{
-					if(m > 0) lit_str += ",";
-					lit_str += setS0[i].LitArgArgs[k][l][m];
-				}
-				if(setS0[i].LitArgArgs[k][l].size() > 0) lit_str += ")";
-			}
-			lit_str += ").";
-
-			//Write the k-th literal of the i-th state
-			state_str += (lit_str + "\n");
-		}
-
-		//Save the state string
-		states_list.push_back(state_str);
-	}
-	for(unsigned int i = 0; i < setA.size(); i++)
-	{
-		std::string act_str("");
-		//Write all the actions that constitute the Action object
-		for(unsigned int j = 0; j < setA[i].ActionNames.size(); j++)
-		{
-			act_str += ("occurs(" + setA[i].ActionNames[j]);
-			if(setA[i].ActionArgs[j].size() > 0) act_str += "(";
-			for(unsigned int k = 0; k < setA[i].ActionArgs[j].size(); k++)
-			{
-				if(k > 0) act_str += ",";
-				act_str += setA[i].ActionArgs[j][k];
-			}
-			if(setA[i].ActionArgs[j].size() > 0) act_str += ")";
-
-			act_str += ",0).\n";
-		}
-
-		//Save the action string
-		actions_list.push_back(act_str);
-	}
-
-	//Generate the list of fluents to be displayed at the output
-	std::vector<std::string> display_list;
-	for(unsigned int i = 0; i <= disp_root_index; i++)
-	{
-		for(unsigned int j = 0; j < SortElements[i].size(); j++)
-		{
-			if(SubsortElemIndexes[i][j] == -1)
-			{
-				if(sp::recursiveCheck((*this),SortElements[i][j],disp_root_index))
-				{
-					//Add this fluent to the display list
-					std::string dis_str("");
-					dis_str += ("val(" + SortElements[i][j] + "(");
-					for(unsigned int k = 0; k < SortArguments[i][j].size(); k++)
-					{
-						if(k > 0) dis_str += ",";
-						dis_str += ("V" + std::to_string(k));
-					}
-					dis_str += "),true,1).";
-
-					//Save the display string
-					display_list.push_back(dis_str);
-				}
-			}
-		}
-	}
-
-	// For each pair state-action, append them to the base GEN_TRANS SPARC file
-	// and compute their answer-sets to obtain the reached states
-	std::vector<bool> actionReachedState(static_cast<int>(setA.size()),false);
-	sp::shellCmd("rm -rf gentrans_files;mkdir gentrans_files");
-	sp::shellCmd("rm -rf gentrans_as;mkdir gentrans_as");
-	for(unsigned int i = 0; i < states_list.size(); i++)
-	{
-		for(unsigned int j = 0; j < actions_list.size(); j++)
-		{
-			//Create temporary copy of '_GEN_TRANS.sp' file
-			std::string safile("gentrans_files/s"+std::to_string(i)+"a"+std::to_string(j)+"_"+cpFile);
-			std::string cmd("cp " + cpFile + " " + safile);
-			sp::shellCmd(cmd);
-
-			//Append to the temporary copy the i-th state and j-th action
-			std::ofstream saFile;
-			saFile.open(safile,std::ofstream::app);
-			saFile << "\%---------STATE-" << i << std::endl;
-			saFile << states_list[i] << std::endl;
-			saFile << "\%---------ACTION-" << j << std::endl;
-			saFile << actions_list[j] << std::endl;
-
-			//Add lines to display only states reached by executing j-th action
-			saFile << "display" << std::endl;
-			for(unsigned int k = 0; k < display_list.size(); k++)
-				saFile << display_list[k] << std::endl;
-			saFile.close();
-
-			//Solve the ASP program by compiling the SPARC file
-			std::string tas_file("gentrans_as/s"+std::to_string(i)+"a"+std::to_string(j)+"_TRANS_AS.txt");
-			sp::shellCmd("java -jar " + std::string(PATH_TO_SPARC) + " " + safile + " -A > " + tas_file);
-			//Extract the reached states from the answer-sets file
-			std::vector<sp::PState> setS1 = sp::pstatesFromFile(tas_file);
-
-			//Build the transitions from:
-			// - Starting state i
-			// - Action j
-			// - Reached state k
-			if(setS1.size() == 0) continue;
-			else
-			{
-				actionReachedState[j] = true;
-				for(unsigned int k = 0; k < setS1.size(); k++)
-				{
-					sp::Transition saT(setA[j],setS0[i],setS1[k]);
-					outputTrans.push_back(saT);
-				}
-			}
-		}
-	}
-
-	//Delete from the vector of actions, those that did not reach a state
-	//from any state if S0
-	std::vector<bool>::iterator it;
-	while(true)
-	{
-		it = std::find(actionReachedState.begin(),actionReachedState.end(),false);
-		if(it == actionReachedState.end()) break;
-		for(unsigned int i = 0; i < actionReachedState.size(); i++)
-		{
-			if(!actionReachedState[i])
-			{
-				actionReachedState.erase(actionReachedState.begin()+i);
-				setA.erase(setA.begin()+i);
-			}
-		}
-	}
-
-	// Assign IDs to the states and actions of each transition, with respect to
-	// the steS0 and setA vectors
-	for(unsigned int i = 0; i < outputTrans.size(); i++)
-	{
-		outputTrans[i].setStatesID(setS0);
-		outputTrans[i].setActionID(setA);
-	}
-
-	return outputTrans;
-}
-
 std::vector<sp::Action> sp::DomainSort::generateActions(std::string const &rootGenSort, std::vector<sp::PState> const &S) const
 {
 	//Output list of generated actions
@@ -1665,6 +1346,329 @@ std::vector<sp::Action> sp::DomainSort::generateActions(std::string const &rootG
 
 	return listOfActions;
 }
+
+std::vector<sp::Transition> sp::DomainSort::generateTransitions(std::vector<sp::PState> const &setS0, std::vector<sp::Action> &setA, std::string const &rootDisplaySort)
+{
+	/*
+
+	This method assumes that the SPARC file loaded to generate this DomainSort:
+
+	 - For each action, it has a defined fluent that defines the set of possible outcomes
+	   an action can result in. This fluent is defined by the user, and must 
+
+			defined fluent for possible outcome:
+
+				actionname_pos_outcome(#arg1,#arg2,...)
+
+	The list of args of this def. fluent must match those of the inertial fluent the action
+	modifies. Also, the first argument of the inertial and defined fluent, must be of the
+	same sort than the action, for instance,
+
+			inertial fluent: location(#robot,#cell)
+			defined fluent: move_left_pos_outcome(#robot,#cell)
+			action: move_left(#robot)
+
+	Thus, this method does not verifies if the the correspondant defined fluent for each
+	action actually exists, it is responsability of the SPARC coder to provide definition
+	of these defined fluents.
+
+	*/
+
+	/*
+
+	* ISSUES WITH NON-DETERMINISTIC CAUSAL LAWS
+
+	When a causal law is being extended to its non-deterministic version, a defined fluent 
+	is created for the purpose of defining the set of possible outcomes for the particular 
+	occurrences of the action.
+
+	Once this defined fluent has been created, there are two sets of variables that are of 
+	our particular interest:
+		- The variables in the head of the causal law (set A)
+		- The variables that are parameters of the action (set B)
+
+	It is clear that the variables in the fluent that is a result of executing the action 
+	and the variables of the defined fluent must have a 1-to-1 correspondance. However, it 
+	is not obvious the way the varibles from set A and set B relate to each other.
+
+	In order for a system to automatically generate transitions of states using non-deterministic 
+	causal laws (with choice rules), it is necessary to homogenize the way causal laws are written. 
+	By homogenizing causal law's structures, we provide a standard rule on the correspondance of 
+	variables in set A and set B.
+
+	As an attempt to homogenize causal laws, we provide a standard that described as follows:
+
+	  i) The list of input parameters of an action and the fluent it modifies, must be share 
+	the first type of input parameter, therefore, they can have different lists of input 
+	parameters. For instance,
+
+					location(#robot,#cell) and move_left(#robot)
+
+	 ii) All inertial fluents (those modified by actions) are interpreted as properties of an 
+	object. In our homogenization, the object this properties describe is always the first 
+	variable of the fluent, that is,
+
+					Property(Object,Prop_param1,Prop_param1,...)
+
+	iii) When generating a non-deterministic causal law, the correspondance between variables 
+	of set A and those of set B, is defined only by a 1-to-1 correspondance between the first 
+	parameter of A and B. The rest of the parameters are completely unrelated. For instance,
+
+	Example 1.
+	{val(on(B,V0),true,I+1) : val(poss_outcome_put(B,V0),true,I)} :- I < n, occurs(put(B,L),I).
+
+	Example 2.
+	{val(location(R,V0),true,I+1) : val(poss_outcome_move_left(R,V0),true,I)} :- I < n, occurs(move_left(R),I).
+
+	*/
+
+	//Vector with hold the generated transitions
+	std::vector<sp::Transition> outputTrans;
+
+	//Initial checking on input parameters
+	if(!FileIsLoaded) return outputTrans;
+	if(setS0.size() == 0) return outputTrans;
+	if(setA.size() == 0) return outputTrans;
+	if(rootDisplaySort.length() <= 1) return outputTrans;
+	if(!sp::startsWith(rootDisplaySort,"#")) return outputTrans;
+	int disp_root_index = -1;
+	for(unsigned int i = 0; i < Sorts.size(); i++)
+	{
+		if(rootDisplaySort.substr(1,-1) == Sorts[i])
+		{
+			disp_root_index = i;
+			break;
+		}
+	}
+	if(disp_root_index == -1) return outputTrans;
+
+	//Create a copy file from 'SourceFile'
+	std::vector<std::string> path_vec = sp::splitStr(SourceFile,"/");
+	int last_index = path_vec.size() - 1;
+	std::vector<std::string> temp_vec = sp::splitStr(path_vec[last_index],".");
+	std::string cpFile =  temp_vec[0] + "_GEN_TRANS.sp";
+
+	//Replace the causal laws by their non-deterministic version
+	std::ifstream inputFile;
+	std::ofstream outputFile;
+	inputFile.open(SourceFile,std::ifstream::in);
+	outputFile.open(cpFile,std::ofstream::out);
+	std::string temp_line;
+	int ln_counter = 0;
+	int cl_counter = 0;
+	while(std::getline(inputFile,temp_line))
+	{
+		if(CausalLawStartLines.size() > 0)
+		{
+			//Look for the beggining of causal laws
+			if(ln_counter == CausalLawStartLines[cl_counter])
+			{
+				//Ignore the lines that correspond a causal law
+				for(int i = 0; i < CausalLawLengths[cl_counter]-1; i++)
+				{
+					std::getline(inputFile,temp_line);
+					ln_counter++;
+				}
+
+				//Generate the non-determinitsic causal law
+				std::string ndcl_str("1{val(");
+				ndcl_str += CausalHeadFluents[cl_counter]+"(X";
+				for(int i = 1; i < CausalHeadFluentsArgs[cl_counter].size(); i++)
+					ndcl_str += (",V" + std::to_string(i));
+				ndcl_str += ("),true,I+1):");
+				ndcl_str += ("val(" + CausalBodyActions[cl_counter] + "_pos_outcome(X");
+				for(unsigned int i = 1; i < CausalHeadFluentsArgs[cl_counter].size(); i++)
+					ndcl_str += (",V" + std::to_string(i));
+				ndcl_str += ("),true,I)}1:-\n\t");
+				for(unsigned int i = 0; i < CausalBodyOthers[cl_counter].size(); i++)
+					ndcl_str += (CausalBodyOthers[cl_counter][i] + ",\n\t");
+				ndcl_str += ("occurs(" + CausalBodyActions[cl_counter] + "(X");
+				for(int i = 1; i < CausalBodyActionsArgs[cl_counter].size(); i++)
+					ndcl_str += (",X" + std::to_string(i));
+				ndcl_str += "),I).";
+				outputFile << ndcl_str << std::endl;
+
+				//Increment counter to replace the next causal law
+				cl_counter++;
+			}
+			else if(sp::startsWith(temp_line,"display")) break;
+			else outputFile << temp_line << std::endl;
+		}
+		else if(sp::startsWith(temp_line,"display")) break;
+		else outputFile << temp_line << std::endl;
+
+		ln_counter++;
+	}
+	inputFile.close();
+	outputFile.close();
+
+	//For each state and each action generate a single string, that will be re-used
+	//when adding them to a SPARC FILE
+	std::vector<std::string> states_list;
+	std::vector<std::string> actions_list;
+	for(unsigned int i = 0; i < setS0.size(); i++)
+	{
+		std::string state_str("");
+		//Write the i-th state's literals
+		for(unsigned int j = 0; j < setS0[i].LitNames.size(); j++)
+		{
+			std::string lit_str("");
+			lit_str += (setS0[i].LitNames[j] + "(");
+			for(unsigned int k = 0; k < setS0[i].LitArgs[j].size(); k++)
+			{
+				if(k > 0) lit_str += ",";
+				lit_str += setS0[i].LitArgs[j][k];
+				if(setS0[i].LitArgArgs[j][k].size() > 0) lit_str += "(";
+				for(unsigned int l = 0; l < setS0[i].LitArgArgs[j][k].size(); l++)
+				{
+					if(l > 0) lit_str += ",";
+					lit_str += setS0[i].LitArgArgs[j][k][l];
+					if(setS0[i].LitArgArgArgs[j][k][l].size() > 0) lit_str += "(";
+					for(unsigned int m = 0; m < setS0[i].LitArgArgArgs[j][k][l].size(); m++)
+					{
+						if(m > 0) lit_str += ",";
+						lit_str += setS0[i].LitArgArgArgs[j][k][l][m];
+					}
+					if(setS0[i].LitArgArgArgs[j][k][l].size() > 0) lit_str += ")";
+				}
+				if(setS0[i].LitArgArgs[j][k].size() > 0) lit_str += ")";
+			}
+			lit_str += ").";
+
+			//Write the k-th literal of the i-th state
+			state_str += (lit_str + "\n");
+		}
+
+		//Save the state string
+		states_list.push_back(state_str);
+	}
+	for(unsigned int i = 0; i < setA.size(); i++)
+	{
+		std::string act_str("");
+		//Write all the actions that constitute the Action object
+		for(unsigned int j = 0; j < setA[i].ActionNames.size(); j++)
+		{
+			act_str += ("occurs(" + setA[i].ActionNames[j]);
+			if(setA[i].ActionArgs[j].size() > 0) act_str += "(";
+			for(unsigned int k = 0; k < setA[i].ActionArgs[j].size(); k++)
+			{
+				if(k > 0) act_str += ",";
+				act_str += setA[i].ActionArgs[j][k];
+				if(setA[i].ActionArgArgs[j][k].size() > 0) act_str += "(";
+				for(unsigned int l = 0; l < setA[i].ActionArgArgs[j][k].size(); l++)
+				{
+					if(l > 0) act_str += ",";
+					act_str += setA[i].ActionArgArgs[j][k][l];
+				}
+				if(setA[i].ActionArgArgs[j][k].size() > 0) act_str += ")";
+			}
+			if(setA[i].ActionArgs[j].size() > 0) act_str += ")";
+
+			act_str += ",0).\n";
+		}
+
+		//Save the action string
+		actions_list.push_back(act_str);
+	}
+
+	//Generate the list of fluents to be displayed at the output
+	std::vector<std::string> display_list;
+	for(unsigned int i = 0; i <= disp_root_index; i++)
+	{
+		for(unsigned int j = 0; j < SortElements[i].size(); j++)
+		{
+			if(SubsortElemIndexes[i][j] == -1)
+			{
+				if(sp::recursiveCheck((*this),SortElements[i][j],disp_root_index))
+				{
+					//Add this fluent to the display list
+					std::string dis_str("");
+					dis_str += ("val(" + SortElements[i][j] + "(");
+					for(unsigned int k = 0; k < SortArguments[i][j].size(); k++)
+					{
+						if(k > 0) dis_str += ",";
+						dis_str += ("V" + std::to_string(k));
+					}
+					dis_str += "),true,1).";
+
+					//Save the display string
+					display_list.push_back(dis_str);
+				}
+			}
+		}
+	}
+
+	// For each pair state-action, append them to the base GEN_TRANS SPARC file
+	// and compute their answer-sets to obtain the reached states
+	std::vector<bool> actionReachedState(static_cast<int>(setA.size()),false);
+	sp::shellCmd("rm -rf gentrans_files;mkdir gentrans_files");
+	sp::shellCmd("rm -rf gentrans_as;mkdir gentrans_as");
+	for(unsigned int i = 0; i < states_list.size(); i++)
+	{
+		for(unsigned int j = 0; j < actions_list.size(); j++)
+		{
+			//Create temporary copy of '_GEN_TRANS.sp' file
+			std::string safile("gentrans_files/s"+std::to_string(i)+"a"+std::to_string(j)+"_"+cpFile);
+			std::string cmd("cp " + cpFile + " " + safile);
+			sp::shellCmd(cmd);
+
+			//Append to the temporary copy the i-th state and j-th action
+			std::ofstream saFile;
+			saFile.open(safile,std::ofstream::app);
+			saFile << "\%---------STATE-" << i << std::endl;
+			saFile << states_list[i] << std::endl;
+			saFile << "\%---------ACTION-" << j << std::endl;
+			saFile << actions_list[j] << std::endl;
+
+			//Add lines to display only states reached by executing j-th action
+			saFile << "display" << std::endl;
+			for(unsigned int k = 0; k < display_list.size(); k++)
+				saFile << display_list[k] << std::endl;
+			saFile.close();
+
+			//Solve the ASP program by compiling the SPARC file
+			std::string tas_file("gentrans_as/s"+std::to_string(i)+"a"+std::to_string(j)+"_TRANS_AS.txt");
+			sp::shellCmd("java -jar " + std::string(PATH_TO_SPARC) + " " + safile + " -A > " + tas_file);
+			//Extract the reached states from the answer-sets file
+			std::vector<sp::PState> setS1 = sp::pstatesFromFile(tas_file);
+
+			//Build the transitions from:
+			// - Starting state i
+			// - Action j
+			// - Reached state k
+			if(setS1.size() == 0) continue;
+			else
+			{
+				actionReachedState[j] = true;
+				for(unsigned int k = 0; k < setS1.size(); k++)
+				{
+					sp::Transition saT(setA[j],setS0[i],setS1[k]);
+					outputTrans.push_back(saT);
+				}
+			}
+		}
+	}
+
+	//Delete from the vector of actions, those that did not reach a state
+	//from any state if S0
+	std::vector<bool>::iterator it;
+	while(true)
+	{
+		it = std::find(actionReachedState.begin(),actionReachedState.end(),false);
+		if(it == actionReachedState.end()) break;
+		for(unsigned int i = 0; i < actionReachedState.size(); i++)
+		{
+			if(!actionReachedState[i])
+			{
+				actionReachedState.erase(actionReachedState.begin()+i);
+				setA.erase(setA.begin()+i);
+			}
+		}
+	}
+
+	return outputTrans;
+}
+
 
 
 

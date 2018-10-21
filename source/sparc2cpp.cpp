@@ -169,6 +169,40 @@ bool sp::isInt(std::string const &inputString)
 	return true;
 }
 
+bool sp::isFloat(std::string const &inputString)
+{
+	int len = inputString.length();
+
+	//Empty string cannot be converted to a float number
+	if(len == 0) return false;
+
+	bool minus_read = false;
+	bool point_read = false;
+	for(int i = 0; i < len; i++)
+	{
+		if(!std::isdigit(inputString[i]))
+		{
+			//The "-" can only be at the first position
+			if(inputString[i] == '-' && i == 0) minus_read = true;
+			else if(inputString[i] == '.')
+			{
+				//The "." cannot be at the first position
+				if(i == 0) return false;
+				//The "." cannot be at the last position
+				else if(i == (len-1)) return false;
+				//The "." cannot be next to the "-", there must be at least a digit between them
+				else if(i == 1 && minus_read) return false;
+				//The "cannot apper more than once"
+				else if(point_read) return false;
+				else point_read = true;
+			}
+			else return false;
+		}
+	}
+
+	return true;
+}
+
 std::vector<sp::PState> sp::pstatesFromFile(std::string const &answerSetsFile)
 {
 	std::ifstream inputFile;

@@ -104,6 +104,13 @@ namespace sp
 	bool isInt(std::string const &inputString);
 
 	/**
+	 * \brief This method is for verifying if a string could be succesfully converted into a float number.
+	 * \param inputString The string to be verified.
+	 * \return Returns true if inputString can be successfully converted into a float number, otherwise, false.
+	*/
+	bool isFloat(std::string const &inputString);
+
+	/**
 	 * \brief This method extracts from a text file a set of answer sets, where each answer set is constituted by a collection of literals, therefore each answer set is represented by a PState object. 
 	 * \param answerSetsFile String containing the path to the answer sets file.
 	 * \return Returns a vector of PState objects, from which each one corresponds to an answer set.

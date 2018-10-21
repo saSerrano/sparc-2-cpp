@@ -4,7 +4,311 @@
 #include <PState.hpp>
 #include <Action.hpp>
 #include <Transition.hpp>
-#include <tuple>
+
+std::tuple<std::vector<int>,std::vector<std::string>> sp::Pomdp::getStats(std::string file,std::vector<std::string> const &actions,std::vector<std::string> const &states,std::vector<std::string> const &obs)
+{
+	//Output tuple that will hold the stats and reward function
+	std::tuple<std::vector<int>,std::vector<std::string>> stats;
+
+	//Initial check
+	if(actions.size() == 0) return stats;
+	if(states.size() == 0) return stats;
+	if(obs.size() == 0) return stats;
+	std::ifstream infile;
+	infile.open(file,std::ifstream::in);
+	if(!infile.is_open()) return stats;
+
+	//Gather the useful lines
+	std::string line;
+	std::vector<std::string> lines;
+	while(std::getline(infile,line))
+	{
+		//Keep the non-empty lines
+		if(line.find("T") != -1) lines.push_back(line);
+		else if(line.find("O") != -1) lines.push_back(line);
+		else if(line.find("R") != -1) lines.push_back(line);
+		else if(line.find("0") != -1) lines.push_back(line);
+		else if(line.find("i") != -1) lines.push_back(line);
+		else if(line.find("1") != -1) lines.push_back(line);
+	}
+
+	//Extract the T, O and R functions from the raw text
+	std::vector<int> gathAction;
+	std::vector<std::string> gathMat;
+	std::string temp_s("");
+	unsigned int row_c = 0;
+	for(unsigned int i = 0; i < lines.size(); i++)
+	{
+		//Extract a matrix of prob. for the T and O functions
+		if(lines[i].find("T") != -1 || lines[i].find("O") != -1)
+		{
+			temp_s = "";
+			row_c =0;
+			std::vector<std::string> sep_vec = sp::splitStr(lines[i],":");
+			if(sep_vec.size() != 2 && sep_vec.size() != 4) continue;
+
+			//Determine if its a "T" or "O" matrix
+			bool is_t = (lines[i].find("T") != -1);
+
+			//T-matrix in the form of: matrix, "uniform" or "identity", or
+			//O-matrix in the form of: matrix or "uniform"
+			if(sep_vec.size() == 2)
+			{
+				//Verify if the action is actually in the list of valid actions,
+				//otherwise don't even bother building the matrix
+				int action_index = -1;
+				sep_vec[1] = sp::stripSpaces(sep_vec[1]);
+				for(unsigned int j = 0; j < actions.size(); j++)
+				{
+					if(sep_vec[1] == actions[j])
+					{
+						action_index = j;
+						break;
+					}
+				}
+				if(action_index == -1) continue;
+
+				//Make sure there is at least 1 line after the i-th one
+				if(i < lines.size()-1)
+				{
+					//It is an identity or an uniform matrix
+					if(lines[i+1].find("identity") != -1 || lines[i+1].find("uniform") != -1)
+					{
+						//This matrix has been accepted
+						if(is_t) temp_s = "T: " + actions[action_index];
+						else temp_s = "O: " + actions[action_index];
+
+						if(is_t)
+						{
+							if(lines[i+1].find("identity") != -1) temp_s += "\nidentity";
+							else temp_s += "\nuniform";
+
+							//Save the matrix
+							gathMat.push_back(temp_s);
+							gathAction.push_back(action_index);
+						}
+						else
+						{
+							if(lines[i+1].find("uniform") != -1)
+							{
+								temp_s += "\nuniform";
+
+								//Save the matrix
+								gathMat.push_back(temp_s);
+								gathAction.push_back(action_index);
+							}
+						}
+
+						//Increase the index due to the second line of this matrix was read
+						i++;
+					}
+					//It might be a custom matrix
+					else
+					{
+						//Gather the rows for this matrix
+						for(unsigned int j = i+1; j < lines.size(); j++)
+						{
+							std::vector<std::string> temp_vec;
+							temp_vec = sp::splitStr(lines[j]," ");
+							if(temp_vec.size() == states.size() && is_t)
+							{
+								//The j-th line is a valid row in the T-matrix that is
+								//being built
+								temp_s += (lines[j] + "\n");
+								row_c++;
+							}
+							else if(temp_vec.size() == obs.size() && !is_t)
+							{
+								//The j-th line is a valid row in the O-matrix that is
+								//being built
+								temp_s += (lines[j] + "\n");
+								row_c++;
+							}
+							else
+							{
+								//The j-th line is not a row for the matrix, so stop
+								//gathering rows for this matrix
+
+								//Increase the index due to the row-lines that were read
+								i += row_c;
+								break;
+							}
+
+							//This matrix has been accepted
+							if(row_c == states.size())
+							{
+								if(is_t) temp_s = ("T: "+actions[action_index]+"\n"+temp_s);
+								else temp_s = ("O: "+actions[action_index]+"\n"+temp_s);
+
+								//Save the matrix
+								gathMat.push_back(temp_s);
+								gathAction.push_back(action_index);
+
+								//Increase the index due to the row-lines that were read
+								i += row_c;
+								break;
+							}
+						}
+					}
+
+				}
+
+			}
+			//It is a 1 line T-matrix
+			else
+			{
+				//Strip the spaces from the first 3 elements of the line
+				sep_vec[0] = sp::stripSpaces(sep_vec[0]);
+				sep_vec[1] = sp::stripSpaces(sep_vec[1]);
+				sep_vec[2] = sp::stripSpaces(sep_vec[2]);
+				//Separate by the " " the last element
+				std::vector<std::string> last_arg = sp::splitStr(sep_vec[3]," ");
+
+				//Make sure the last element has 2 tokens separated by " ", that
+				//the first element is "T" or "O", and the third one is "*"
+				if(last_arg.size() == 2 					&&
+				  ((sep_vec[0] == "T" && is_t) || (sep_vec[0] == "O" && !is_t)) &&
+				   sep_vec[2] == "*")
+				{
+					//Make sure the prob. assigned for this line is 1
+					if(last_arg[1] == "1")
+					{
+						//Get the indexes of the action
+						int action_index = -1;
+						int other_index = -1;
+						for(unsigned int j = 0; j < actions.size(); j++)
+						{
+							if(sep_vec[1] == actions[j])
+							{
+								action_index = j;
+								break;
+							}
+						}
+
+						//Get the index of the ending-state
+						if(is_t)
+						{
+							for(unsigned int j = 0; j < states.size(); j++)
+							{
+								if(last_arg[0] == states[j])
+								{
+									other_index = j;
+									break;
+								}
+							}
+						}
+						//Get the index of the observation
+						else
+						{
+							for(unsigned int j = 0; j < obs.size(); j++)
+							{
+								if(last_arg[0] == obs[j])
+								{
+									other_index = j;
+									break;
+								}
+							}
+						}
+
+						//This line has been accepted
+						if(action_index > -1 && other_index > -1)
+						{
+							gathMat.push_back(lines[i]);
+							gathAction.push_back(action_index);
+						}
+					}
+				}
+			}
+//-------------------------------------------------------------------------------
+		}
+		//Extract a part of the R function
+		// -- Only the 1-line format is supported --
+		else if(lines[i].find("R") != -1)
+		{
+			//Extract the elements separated by ":"
+			std::vector<std::string> temp_vec;
+			temp_vec = sp::splitStr(lines[i],":");
+
+			//Verify this line satisfies the the 1-line format
+			if(temp_vec.size() != 5) continue;
+			for(unsigned int j = 0; j < 4; j++) temp_vec[j] = sp::stripSpaces(temp_vec[j]);
+			if(temp_vec[0] != "R") continue;
+
+			//Check for a valid action
+			if(temp_vec[1] != "*")
+			{
+				bool a_found = false;
+				for(unsigned int j = 0; j < actions.size(); j++)
+				{
+					if(temp_vec[1] == actions[j])
+					{
+						a_found = true;
+						break;
+					}
+				}
+				if(!a_found) continue;
+			}
+
+			//Check for valid starting and ending states
+			int amount_s_found = 0;
+			for(int j = 2; j <= 3; j++)
+			{
+				if(temp_vec[j] == "*")
+				{
+					amount_s_found++;
+					continue;
+				}
+
+				for(unsigned int k = 0; k < states.size(); k++)
+				{
+					if(temp_vec[j] == states[k])
+					{
+						amount_s_found++;
+						break;
+					}
+				}
+			}
+			if(amount_s_found < 2) continue;
+
+			//Start building the reward specification
+			temp_s = "R: " + temp_vec[1] + " : " + temp_vec[2] + " : " + temp_vec[3] + " : ";
+
+			//Extract the elements separated by a " " from the last element of
+			//temp_vec
+			temp_vec = sp::splitStr(temp_vec[4]," ");
+			if(temp_vec.size() != 2) continue;
+
+			//Check for a valid observation
+			if(temp_vec[0] != "*")
+			{
+				bool o_found = false;
+				for(unsigned int j = 0; j < obs.size(); j++)
+				{
+					if(temp_vec[0] == obs[j])
+					{
+						o_found = true;
+						break;
+					}
+				}
+				if(!o_found) continue;
+			}
+
+			//Check for a valid reward value, i.e., a numeric value
+			if(!sp::isFloat(temp_vec[1])) continue;
+
+			//Finish building the reward specification and save it
+			temp_s += temp_vec[0] + " " + temp_vec[1];
+			gathMat.push_back(temp_s);
+			gathAction.push_back(-1);
+		}
+	}
+
+	//Insert the matrix-strings and their respective action-indexes in "stats"
+	std::get<0>(stats) = gathAction;
+	std::get<1>(stats) = gathMat;
+
+	return stats;
+}
 
 sp::Pomdp::Pomdp():
 discount(0.95),
@@ -61,13 +365,14 @@ bool sp::Pomdp::setValues(std::string values)
 }
 
 bool sp::Pomdp::generatePomdp(std::vector<sp::PState> &S, 
+                              std::vector<sp::PState> &Z, 
                               std::vector<sp::Action> const &nkA, 
                               std::vector<sp::Action> const &kA, 
                               std::vector<sp::Action> const &termA, 
-                              std::vector<sp::PState> &Z, 
-                              std::vector<sp::Transition> const &T, 
+                              std::vector<sp::Transition> &T, 
                               sp::DomainSort const &ds, 
-                              std::string const &pomdpFile)
+                              std::string const &pomdpFile,
+                              std::string const &statFile)
 {
 	//Input parameters checking
 	//if(S.size() == 0) return false;
@@ -78,31 +383,63 @@ bool sp::Pomdp::generatePomdp(std::vector<sp::PState> &S,
 	//if(T.size() == 0) return false;
 	//if(!ds.fileIsLoaded()) return false;
 
-	//Verify if the "absorbing" state is within S, if not, add it
-	sp::PState absb_state("{absb}");
-	bool absb_is_included = false;
-	for(unsigned int i = 0; i < S.size(); i++)
-	{
-		if(S[i].equals(absb_state))
-		{
-			absb_is_included = true;
-			break;
-		}
-	}
-	if(!absb_is_included) S.push_back(absb_state);
+	//Add the "absorbing" state to S
+	S.push_back(sp::PState("{absb}"));
 
-	//Verify if the "none" observation is within Z, if not, add it
-	sp::PState none_obs("{none}");
-	bool none_is_included = false;
+	//Delete from Z those states that have "undet" for value
+	std::vector<int> obs2delete;
 	for(unsigned int i = 0; i < Z.size(); i++)
 	{
-		if(Z[i].equals(none_obs))
+		if(Z[i].str().find("undet") != -1) obs2delete.push_back(i);
+	}
+	for(int i = obs2delete.size()-1; i >= 0 ; i--)
+	{
+		Z.erase(Z.begin() + obs2delete[i]);
+	}
+
+	//Add the "None" observation to Z
+	Z.push_back(sp::PState("{none}"));
+
+	//Substitute with the "None" observation those states in that have for value "undet"
+	//within the vector of transitions T
+	for(unsigned int i = 0; i < T.size(); i++)
+	{
+		if(T[i].ps1.str().find("undet") != -1)
 		{
-			none_is_included = true;
-			break;
+			T[i].ps1.set("{none}");
 		}
 	}
-	if(!none_is_included) Z.push_back(none_obs);
+
+	//Index the transitions in T with respect to [S,Z] and [nkA,kA,termA]
+	std::vector<sp::PState> SZ;
+	std::vector<sp::Action> AAA;
+	SZ.insert(SZ.end(),S.begin(),S.end());
+	SZ.insert(SZ.end(),Z.begin(),Z.end());
+	AAA.insert(AAA.end(),nkA.begin(),nkA.end());
+	AAA.insert(AAA.end(),kA.begin(),kA.end());
+	AAA.insert(AAA.end(),termA.begin(),termA.end());
+	sp::Transition::index(T,SZ,AAA);
+
+//debug
+std::cout << "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$" << std::endl;
+std::cout << "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$" << std::endl;
+std::cout << "################  STATES  ##################" << std::endl;
+for(unsigned int i = 0; i < SZ.size(); i++)
+{
+std::cout << "State-" << i << ": " + SZ[i].str() << std::endl;
+}
+std::cout << "################  ACTIONS  ##################" << std::endl;
+for(unsigned int i = 0; i < AAA.size(); i++)
+{
+std::cout << "Action-" << i << ": " + AAA[i].str() << std::endl;
+}
+std::cout << "################  TRANSITIONS  ##################" << std::endl;
+for(unsigned int i = 0; i < T.size(); i++)
+{
+T[i].debug();
+std::cout << "----------------------------------------" << std::endl;
+}
+
 
 	//Create the pomdp file
 	std::ofstream outf;
@@ -119,98 +456,48 @@ bool sp::Pomdp::generatePomdp(std::vector<sp::PState> &S,
 	for(unsigned int i = 0; i < S.size(); i++)
 	{
 		int state_len = S[i].str().length();
+		std::string all_lits = S[i].str().substr(1,state_len-2);
+		std::vector<std::string> lits_vec = splitStr(all_lits,",");
+		lits_vec = correctCommaSplit(lits_vec);
 		std::string temp_state_str("");
-		if(S[i].len() == 1)
+		for(unsigned int j = 0; j <  lits_vec.size(); j++)
 		{
-			//For single-literal states
-			temp_state_str = S[i].str().substr(1,state_len-2);
-			states_vec.push_back(temp_state_str);
-			outf << S[i].str().substr(1,state_len-2) + " ";
+			if(j > 0) temp_state_str += "-";
+			temp_state_str += lits_vec[j];
 		}
-		else
-		{
-			//For states with more than 1 literal
-			std::string all_lits = S[i].str().substr(1,state_len-2);
-			std::vector<std::string> lits_vec = splitStr(all_lits,",");
-			lits_vec = correctCommaSplit(lits_vec);
-			for(unsigned int j = 0; j <  lits_vec.size(); j++)
-			{
-				if(j > 0) temp_state_str += "-";
-				temp_state_str += lits_vec[j];
-			}
-		}
+
 		states_vec.push_back(temp_state_str);
 		outf << temp_state_str + " ";
 	}
 	outf << std::endl;
 	//---------------------------------------------------------------------------------------------
-	//ACTIONS
-	//Non-knowledge producing actions
+	//ACTIONS: knA, kA, and termA
 	std::vector<std::string> action_vec;
 	outf << "actions: ";
-	for(unsigned int i = 0; i < nkA.size(); i++)
+	for(unsigned int i = 0; i < AAA.size(); i++)
 	{
 		std::string temp_a_str("");
-		unsigned int conc_actions = nkA[i].ActionNames.size();
-		for(unsigned int j = 0; j < conc_actions; j++)
+		for(unsigned int j = 0; j < AAA[i].ActionNames.size(); j++)
 		{
 			if(j > 0) temp_a_str += "-";
-			temp_a_str += nkA[i].ActionNames[j];
-			if(nkA[i].ActionArgs[j].size() > 0)
+			temp_a_str += AAA[i].ActionNames[j];
+			if(AAA[i].ActionArgs[j].size() > 0)
 			{
 				temp_a_str += "(";
-				for(unsigned int k = 0; k < nkA[i].ActionArgs[j].size(); k++)
+				for(unsigned int k = 0; k < AAA[i].ActionArgs[j].size(); k++)
 				{
 					if(k > 0) temp_a_str += ",";
-					temp_a_str += nkA[i].ActionArgs[j][k];
-				}
-				temp_a_str += ")";
-			}
-		}
-		action_vec.push_back(temp_a_str);
-		outf << temp_a_str;
-		outf << " ";
-	}
-	//Knowledge producing actions
-	for(unsigned int i = 0; i < kA.size(); i++)
-	{
-		std::string temp_a_str("");
-		unsigned int conc_actions = kA[i].ActionNames.size();
-		for(unsigned int j = 0; j < conc_actions; j++)
-		{
-			if(j > 0) temp_a_str += "-";
-			temp_a_str += kA[i].ActionNames[j];
-			if(kA[i].ActionArgs[j].size() > 0)
-			{
-				temp_a_str += "(";
-				for(unsigned int k = 0; k < kA[i].ActionArgs[j].size(); k++)
-				{
-					if(k > 0) temp_a_str += ",";
-					temp_a_str += kA[i].ActionArgs[j][k];
-				}
-				temp_a_str += ")";
-			}
-		}
-		action_vec.push_back(temp_a_str);
-		outf << temp_a_str;
-		outf << " ";
-	}
-	//POMDP terminate execution actions
-	for(unsigned int i = 0; i < termA.size(); i++)
-	{
-		std::string temp_a_str("");
-		unsigned int conc_actions = termA[i].ActionNames.size();
-		for(unsigned int j = 0; j < conc_actions; j++)
-		{
-			if(j > 0) temp_a_str += "-";
-			temp_a_str += termA[i].ActionNames[j];
-			if(termA[i].ActionArgs[j].size() > 0)
-			{
-				temp_a_str += "(";
-				for(unsigned int k = 0; k < termA[i].ActionArgs[j].size(); k++)
-				{
-					if(k > 0) temp_a_str += ",";
-					temp_a_str += termA[i].ActionArgs[j][k];
+					temp_a_str += AAA[i].ActionArgs[j][k];
+					if(AAA[i].ActionArgArgs[j][k].size() > 0)
+					{
+						temp_a_str += "(";
+						for(unsigned int l = 0; l < AAA[i].ActionArgArgs[j][k].size(); l++)
+						{
+							if(l > 0) temp_a_str += ",";
+							temp_a_str += AAA[i].ActionArgArgs[j][k][l];
+						}
+						temp_a_str += ")";
+					}
 				}
 				temp_a_str += ")";
 			}
@@ -222,30 +509,30 @@ bool sp::Pomdp::generatePomdp(std::vector<sp::PState> &S,
 	outf << std::endl;
 	//---------------------------------------------------------------------------------------------
 	//OBSERVATIONS
+	std::vector<std::string> obs_vec;
 	outf << "observations: ";
 	for(unsigned int i = 0; i < Z.size(); i++)
 	{
-		int state_len = Z[i].str().length();
-		if(Z[i].len() == 1)
+		int obs_len = Z[i].str().length();
+		std::string all_lits = Z[i].str().substr(1,obs_len-2);
+		std::vector<std::string> lits_vec = splitStr(all_lits,",");
+		lits_vec = correctCommaSplit(lits_vec);
+		std::string temp_obs_str("");
+		for(unsigned int j = 0; j <  lits_vec.size(); j++)
 		{
-			//For single-literal observations
-			outf << Z[i].str().substr(1,state_len-2) + " ";
+			if(j > 0) temp_obs_str += "-";
+			temp_obs_str += lits_vec[j];
 		}
-		else
-		{
-			//For observations with more than 1 literal
-			std::string all_lits = Z[i].str().substr(1,state_len-2);
-			std::vector<std::string> lits_vec = splitStr(all_lits,",");
-			lits_vec = correctCommaSplit(lits_vec);
-			for(unsigned int j = 0; j <  lits_vec.size(); j++)
-			{
-				if(j > 0) outf << "-";
-				outf << lits_vec[j];
-			}
-			outf << " ";
-		}
+
+		obs_vec.push_back(temp_obs_str);
+		outf << temp_obs_str + " ";
 	}
 	outf << std::endl << std::endl;
+
+//debug
+outf.close();
+return true;
+
 	//---------------------------------------------------------------------------------------------
 //TRANSITION FUNCTION
 
@@ -254,16 +541,9 @@ bool sp::Pomdp::generatePomdp(std::vector<sp::PState> &S,
 // The other 0.2 is distributed over the rest of the ending states reached by that action.
 
 // The transitions in T are indexed over the vectors resulting by:
-// - States: concatenating Z at the end of S
-// - Actions: concatenating kA at the end of nkA
+// - States: [S,Z]
+// - Actions: [nkA,kA,termA]
 
-//debug
-std::cout << "++++Transitions++++" << std::endl;
-for(unsigned int i = 0; i < T.size(); i++)
-{
-std::cout << T[i].iS0() << "," << T[i].iA() << "," << T[i].iS1() << std::endl;
-}
-std::cout << "+++++++++++++++++++" << std::endl;
 
 unsigned int lastNKA = nkA.size()-1;
 unsigned int lastKA = kA.size() + lastNKA;
@@ -517,3 +797,8 @@ for(unsigned int i = 0; i < action_vec.size(); i++)
 outf.close();
 return true;
 }
+
+
+
+
+

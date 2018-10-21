@@ -43,13 +43,14 @@ namespace sp
 			friend std::vector<Transition> DomainSort::generateTransitions(std::vector<PState> const &setS0, std::vector<Action> &setA, std::string const &rootActionSort);
 
 			friend bool Pomdp::generatePomdp(std::vector<PState> &S, 
+						      std::vector<PState> &Z, 
 						      std::vector<Action> const &nkA, 
 						      std::vector<Action> const &kA, 
 						      std::vector<Action> const &termA, 
-						      std::vector<PState> &Z, 
-						      std::vector<Transition> const &T, 
+						      std::vector<Transition> &T, 
 						      DomainSort const &ds, 
-						      std::string const &pomdpFile);
+						      std::string const &pomdpFile,
+						      std::string const &statFile);
 
 		public:
 
@@ -67,7 +68,7 @@ namespace sp
 			/**
 			 * \brief This method assigns a new set of actions to an Action object. All the strings must be valid strings in order for the assigment of this new set of actions to take place.
 			 * \param actionStrings Vector of strings that should correspond to actions.
-			 * \return Return true if all the strings in actionStrings were successfully converted to actions, otherwise, false.
+			 * \return Returns true if all the strings in actionStrings were successfully converted to actions, otherwise, false.
 			*/
 			bool set(std::vector<std::string> const &actionStrings);
 

@@ -35,7 +35,7 @@ bool sp::Action::exractActionsFromString(std::vector<std::string> actionStrings)
 		if(!sp::startsWith(actionStrings[i],"occurs")) return false;
 		int lp_count = sp::countOcc(actionStrings[i],"(");
 		int rp_count = sp::countOcc(actionStrings[i],")");
-		if(lp_count < 2 || rp_count < 2 || lp_count != rp_count) return false;
+		if(lp_count < 1 || rp_count < 1 || lp_count != rp_count) return false;
 
 		//Extract the components inside 'occurs'
 		int lp_index = actionStrings[i].find("(");
@@ -52,11 +52,20 @@ bool sp::Action::exractActionsFromString(std::vector<std::string> actionStrings)
 		if(i == 0) timeStamp = t_stamp;
 		else if(timeStamp != t_stamp) return false;
 
-
 		//Check for a valid action
 		int alp_count = sp::countOcc(args[0],"(");
 		int arp_count = sp::countOcc(args[0],")");
-		if(alp_count < 1 || arp_count < 1 || alp_count != arp_count) return false;
+		if(alp_count != arp_count) return false;
+
+		//An action without arguments
+		if(alp_count == 0)
+		{
+			actionNames.push_back(args[0]);
+			actionArgs.push_back(std::vector<std::string>());
+			actionArgArgs.push_back(std::vector<std::vector<std::string>>());
+			continue;
+		}
+
 		int alp_index = args[0].find("(");
 		int arp_index = args[0].rfind(")");
 		if(alp_index > arp_index) return false;

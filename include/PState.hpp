@@ -53,13 +53,14 @@ namespace sp
 			friend std::vector<Transition> DomainSort::generateTransitions(std::vector<PState> const &setS0, std::vector<Action> &setA, std::string const &rootDisplaySort);
 
 			friend bool Pomdp::generatePomdp(std::vector<PState> &S, 
+						      std::vector<PState> &Z, 
 						      std::vector<Action> const &nkA, 
 						      std::vector<Action> const &kA, 
 						      std::vector<Action> const &termA, 
-						      std::vector<PState> &Z, 
-						      std::vector<Transition> const &T, 
+						      std::vector<Transition> &T, 
 						      DomainSort const &ds, 
-						      std::string const &pomdpFile);
+						      std::string const &pomdpFile,
+						      std::string const &statFile);
 
 		public:
 

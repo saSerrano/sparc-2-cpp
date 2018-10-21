@@ -30,7 +30,7 @@ void sp::Transition::debug() const
 	std::cout << "IndexPs1: " << IndexPs1 << std::endl;
 	std::cout << "IndexAction: " << IndexAction << std::endl;
 	std::cout << "P-STATE-0: " + ps0.str() << std::endl;
-	SetofActions.debug();
+	std::cout << "Action:" + SetofActions.str() << std::endl;
 	std::cout << "P-STATE-1: " + ps1.str() << std::endl;
 }
 
@@ -128,4 +128,13 @@ int sp::Transition::iS1() const
 int sp::Transition::iA() const
 {
 	return IndexAction;
+}
+
+void sp::Transition::index(std::vector<sp::Transition> &T, std::vector<sp::PState> const &S, std::vector<sp::Action> const &A)
+{
+	for(unsigned int i = 0; i < T.size(); i++)
+	{
+		T[i].setStatesID(S);
+		T[i].setActionID(A);
+	}
 }
