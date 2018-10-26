@@ -12,15 +12,27 @@ using namespace sp;
 
 int main(int argc, char** argv)
 {
-Pomdp pp;
-vector<PState> ss;
-vector<PState> zz;
-vector<Action> nka;
-vector<Action> ka;
-vector<Action> terma;
+vector<PState> vs;
+vector<PState> vz;
+vector<Action> vnka;
+vector<Action> vka;
+vector<Action> vta;
 vector<Transition> tt;
-pp.loadTD(ss,zz,nka,ka,terma,tt,"td.txt");
-pp.saveTD(ss,zz,nka,ka,terma,tt,"td2.txt");
+Pomdp pp;
+
+//Load the transition-diagram from a file
+if(pp.loadTD(vs,vz,vnka,vka,vta,tt,"td.txt"))
+{
+	//Generate the guide-file that says which statistics should
+	//be sampled to create the TD's POMDP
+	pp.whatStats(vs,vz,vnka,vka,tt,"stats-guide.txt");
+	cout << "Guide file created." << endl;
+//	string sparcFile("/home/zero/Dropbox/Tesis/SPARC-Learn/2pomdp/rob-navig-orig.sp");
+//	DomainSort ds;
+//	ds.loadFile(sparcFile);
+//	pp.generatePomdp(vs,vz,vnka,vka,vta,tt,ds,"model.pomdp","");
+}
+
 
 return 0;
 //---------------------------------------------------------------------------------

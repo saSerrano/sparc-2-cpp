@@ -200,12 +200,22 @@ namespace sp
 				    std::vector<Transition> &T,
 				    std::string const &tdFile);
 
-			bool whatStats(std::vector<PState> const &S,
-				       std::vector<PState> const &Z,
+			/**
+			 * \brief This method generates a file in which one can know for which transitions the POMDP requires its statistics to be collected, and avoid using the default probabilities.
+			 * \param Si Vector of states.
+			 * \param Zi Vector of observations.
+			 * \param nkA Vector of non-knowledge producing actions.
+			 * \param kA Vector of knowledge producing actions.
+			 * \param T Vector of transitions.
+			 * \param guideFile Output file that wille contain the information on the required statistics.
+			 * \return Returns true if all the input vectors have at least one element, and 'guideFile' is a valid file name.
+			*/
+			bool whatStats(std::vector<PState> const &Si,
+				       std::vector<PState> const &Zi,
 				       std::vector<Action> const &nkA,
 				       std::vector<Action> const &kA,
-				       std::vector<Transition> const &T,
-				       std::string const &tdFile);
+				       std::vector<Transition> &T,
+				       std::string const &guideFile);
 	};
 }
 

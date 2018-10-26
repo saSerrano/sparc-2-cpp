@@ -55,6 +55,13 @@ namespace sp
 					       std::vector<Transition> const &T,
 					       std::string const &tdFile);
 
+			friend bool Pomdp::whatStats(std::vector<PState> const &Si,
+				       std::vector<PState> const &Zi,
+				       std::vector<Action> const &nkA,
+				       std::vector<Action> const &kA,
+				       std::vector<Transition> &T,
+				       std::string const &guideFile);
+
 		public:
 
 			/**

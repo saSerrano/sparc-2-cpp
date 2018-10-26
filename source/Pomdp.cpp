@@ -1361,15 +1361,276 @@ bool sp::Pomdp::loadTD(std::vector<PState> &S,
 	return true;
 }
 
-bool sp::Pomdp::whatStats(std::vector<PState> const &S,
-		          std::vector<PState> const &Z,
+bool sp::Pomdp::whatStats(std::vector<PState> const &Si,
+		          std::vector<PState> const &Zi,
 	    	          std::vector<Action> const &nkA,
 	    	          std::vector<Action> const &kA,
-	    	          std::vector<Transition> const &T,
-	    	          std::string const &tdFile)
+	    	          std::vector<Transition> &T,
+	    	          std::string const &guideFile)
 {
-return true;
+	//Open output file
+	std::ofstream outf;
+	outf.open(guideFile,std::ofstream::out);
+
+	//Initial verification
+	if(!outf.is_open()   ||
+	   Si.size()    == 0 ||
+	   Zi.size()    == 0 ||
+	   nkA.size()   == 0 ||
+	   kA.size()    == 0 ||
+	   T.size()     == 0
+	)
+	{
+		return false;
+	}
+
+	//Create vector of alphabetic indexes
+	std::vector<char> index;
+	for(int i = 97; i <= 122; i++) index.push_back(static_cast<char>(i));
+
+	//Create a vector with the action names as they will appear in the Cassandra file
+	std::vector<sp::Action> AA;
+	AA.insert(AA.end(),nkA.begin(),nkA.end());
+	AA.insert(AA.end(),kA.begin(),kA.end());
+	std::vector<std::string> read_vec;
+	std::vector<std::string> cass_vec;
+	for(unsigned int i = 0; i < AA.size(); i++)
+	{
+		std::string temp_a_str("");
+		for(unsigned int j = 0; j < AA[i].ActionNames.size(); j++)
+		{
+			if(j > 0) temp_a_str += "-";
+			temp_a_str += AA[i].ActionNames[j];
+			if(AA[i].ActionArgs[j].size() > 0)
+			{
+				temp_a_str += "(";
+				for(unsigned int k = 0; k < AA[i].ActionArgs[j].size(); k++)
+				{
+					if(k > 0) temp_a_str += ",";
+					temp_a_str += AA[i].ActionArgs[j][k];
+					if(AA[i].ActionArgArgs[j][k].size() > 0)
+					{
+						temp_a_str += "(";
+						for(unsigned int l = 0; l < AA[i].ActionArgArgs[j][k].size(); l++)
+						{
+							if(l > 0) temp_a_str += ",";
+							temp_a_str += AA[i].ActionArgArgs[j][k][l];
+						}
+						temp_a_str += ")";
+					}
+				}
+				temp_a_str += ")";
+			}
+		}
+		read_vec.push_back(temp_a_str);
+		cass_vec.push_back(fluent2Cass(temp_a_str));
+	}
+
+	//Create copy of States and Observation vectors
+	std::vector<PState> S = Si;
+	std::vector<PState> Z = Zi;
+
+	//Add the "absorbing" state to S
+	S.push_back(sp::PState("{absb}"));
+
+	//Delete from Z those states that have "undet" for value
+	std::vector<int> obs2delete;
+	for(unsigned int i = 0; i < Z.size(); i++)
+	{
+		if(Z[i].str().find("undet") != -1) obs2delete.push_back(i);
+	}
+	for(int i = obs2delete.size()-1; i >= 0 ; i--)
+	{
+		Z.erase(Z.begin() + obs2delete[i]);
+	}
+
+	//Add the "None" observation to Z
+	Z.push_back(sp::PState("{none}"));
+
+	//Substitute with the "None" observation those states in that have for value "undet"
+	//within the vector of transitions T
+	for(unsigned int i = 0; i < T.size(); i++)
+	{
+		if(T[i].ps1.str().find("undet") != -1)
+		{
+			T[i].ps1.set("{none}");
+		}
+	}
+
+	//Index vector 'T' over ['S','Z'] and ['nkA','kA']
+	std::vector<sp::PState> SZ;
+	SZ.insert(SZ.end(),S.begin(),S.end());
+	SZ.insert(SZ.end(),Z.begin(),Z.end());
+	sp::Transition::index(T,SZ,AA);
+
+	//Instructions on how to read the output file
+	outf << "-----------------------------------" << std::endl;
+	outf << "WHICH-STATS?: HOW TO READ THIS FILE" << std::endl;
+	outf << "-----------------------------------" << std::endl;
+	outf << "This file is intended to illustrate the POMDP designer which statistics are re-" << std::endl;
+	outf << "quired, in order to provide more realistic transition probabilities than those" << std::endl;
+	outf << "used in the default version." << std::endl;
+	outf << "" << std::endl;
+	outf << "This file is made up two main sections, the Transition function and Observation " << std::endl;
+	outf << "function. Each section is constituted by the action-matrices for which their sta-" << std::endl;
+	outf << "tistics are required." << std::endl;
+	outf << "" << std::endl;
+	outf << "Above each action matrix, one can find the transitions that require their tran-" << std::endl;
+	outf << "sition probability, along with an alphabetic index, i.e., 'a', 'b', etc. These" << std::endl;
+	outf << "alphabetic indexes can also be found in the immediate next action-matrix. Once" << std::endl;
+	outf << "the probability of a transition has been computed, this one should replace its" << std::endl;
+	outf << "corresponding alphabetic index within the action matrix, in the 'stats' file " << std::endl;
+	outf << "that is passed to the sp::Pomdp::generatePomdp method." << std::endl;
+
+	for(unsigned int i = 0; i < read_vec.size(); i++)
+	{
+		if(i == 0) outf << "############################# TRANSITION FUNCTION #############################" << std::endl;
+		if(i == nkA.size()) outf << "############################# OBSERVATION FUNCTION #############################" << std::endl;
+
+		if(i > 0 && i != nkA.size()) outf <<  "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" << std::endl;
+
+		outf << "READABLE  FORMAT ACTION: " + read_vec[i] << std::endl;
+		outf << "CASSANDRA FORMAT ACTION: " + cass_vec[i] << std::endl << std::endl;
+
+		//Gather the transitions that occur with the i-th action
+		std::vector<unsigned int> relT;
+		for(unsigned int j = 0; j < T.size(); j++)
+		{
+			if(static_cast<unsigned int>(T[j].iA()) == i)
+			{
+				if((i < nkA.size() && T[j].iS1() < S.size())  || //Gather a T-function transition
+				   (i >= nkA.size() && T[j].iS1() >= S.size()) ) //Gather a O-function transition
+				{
+					relT.push_back(j);
+				}
+			}
+		}
+
+		//Print the gathered transitions
+		std::vector<std::string> a_indexes;
+		for(unsigned int j = 0; j < relT.size(); j++)
+		{
+			std::string s_s0, s_s1;
+			s_s0 = SZ[T[relT[j]].iS0()].str(); //Starting state string
+			s_s1 = SZ[T[relT[j]].iS1()].str(); //Ending state string
+
+			//Construct the transition's alphabetic index
+			std::string alpha_i("");
+			int div = j / index.size();
+			int res = j % index.size();
+			alpha_i.append((div+1),index[res]);
+			a_indexes.push_back(alpha_i);
+
+			//Write the transition
+			if(j > 0) outf << "---------------------------" << std::endl;
+			outf << s_s0 << std::endl;
+			outf << "     |" << std::endl;
+			outf << "     " + alpha_i << std::endl;
+			outf << "     |" << std::endl;
+			outf << "     v" << std::endl;
+			outf << s_s1 << std::endl;
+		}
+
+		//Print the matrix for the i-th action, using the alphabetic indexes to show the position of the matrix
+		int cols;
+		std::string fun_type;
+		if(i < nkA.size())
+		{
+			cols = S.size();
+			fun_type = "T: ";
+		}
+		else
+		{
+			cols = Z.size();
+			fun_type = "O: ";
+		}
+		outf << "---------------------------" << std::endl << fun_type + cass_vec[i] << std::endl;
+		for(unsigned int j = 0; j < S.size(); j++)
+		{
+			//Gather the transitions that start in the j-th state
+			std::vector<int> temp;
+			for(unsigned int k = 0; k < relT.size(); k++)
+			{
+				if(j == T[relT[k]].iS0()) temp.push_back(k);
+			}
+
+			//Print the j-th row
+			if(temp.size() == 0)
+			{
+				//There are no transitions that start in the j-th state
+				if(i < nkA.size())
+				{
+					//For T-mats, a 1 in the diagonal
+					for(int k = 0; k < cols; k++)
+					{
+						if(k > 0) outf << " ";
+
+						if(k == j) outf << "1";
+						else outf << "0";
+					}
+				}
+				else
+				{
+					//For O-mats, a 1 in the final element, which corresponds to the 'none' observation
+					for(int k = 0; k < (cols-1); k++)
+					{
+						if(k > 0) outf << " ";
+						outf << "0";
+					}
+					outf << " 1";
+				}
+			}
+			else
+			{
+				//There are transitions that start in the j-th state
+				for(int k = 0; k < cols; k++)
+				{
+					if(k > 0) outf << " ";
+
+					//Offset required when comparing observation-indexes to 'k'
+					int offset = 0;
+					if(i >= nkA.size()) offset = S.size();
+
+					bool trans_found = false;
+					for(unsigned int l = 0; l < temp.size(); l++)
+					{
+						if(k == (T[relT[temp[l]]].iS1() - offset))
+						{
+							outf << a_indexes[temp[l]];
+							trans_found = true;
+							break;
+						}
+					}
+					if(!trans_found) outf << "0";
+
+				}
+			}
+			outf << std::endl;
+		}
+	}
+
+	//Close the output file
+	outf.close();
+
+	return true;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
