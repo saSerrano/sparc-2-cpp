@@ -12,29 +12,15 @@ using namespace sp;
 
 int main(int argc, char** argv)
 {
-vector<string> aa;
-vector<string> ss;
-vector<string> oo;
-
-aa.push_back("listen");
-aa.push_back("open-left");
-aa.push_back("open-right");
-
-ss.push_back("tiger-left");
-ss.push_back("tiger-right");
-
-oo.push_back("tiger-left");
-oo.push_back("tiger-right");
-
 Pomdp pp;
-tuple<vector<int>,vector<string>> stats;
-stats = pp.getStats("/home/zero/code/SPARC-2-CPP/bin/robot-stats.txt",aa,ss,oo);
-for(unsigned int i = 0; i < get<0>(stats).size(); i++)
-{
-	cout << "----------------------------" << endl;
-	cout << "Action index: " << get<0>(stats)[i] << endl;
-	cout << get<1>(stats)[i] << endl;
-}
+vector<PState> ss;
+vector<PState> zz;
+vector<Action> nka;
+vector<Action> ka;
+vector<Action> terma;
+vector<Transition> tt;
+pp.loadTD(ss,zz,nka,ka,terma,tt,"td.txt");
+pp.saveTD(ss,zz,nka,ka,terma,tt,"td2.txt");
 
 return 0;
 //---------------------------------------------------------------------------------
@@ -56,37 +42,37 @@ return 0;
 	vector<Action> NKA = ds.generateActions("#nk_a",S);
 	vector<Action> KA = ds.generateActions("#k_a",S);
 
-cout << "STATES" << endl;
-for(unsigned int i = 0; i < S.size(); i++) cout << S[i].str() << endl;
-
-cout << "OBSERVATIONS" << endl;
-for(unsigned int i = 0; i < Z.size(); i++) cout << Z[i].str() << endl;
-
-cout << "NK - ACTIONS" << endl;
-for(unsigned int i = 0; i < NKA.size(); i++) cout << NKA[i].str() << endl;
-
-cout << "K - ACTIONS" << endl;
-for(unsigned int i = 0; i < KA.size(); i++) cout << KA[i].str() << endl;
+//cout << "STATES" << endl;
+//for(unsigned int i = 0; i < S.size(); i++) cout << S[i].str() << endl;
+//
+//cout << "OBSERVATIONS" << endl;
+//for(unsigned int i = 0; i < Z.size(); i++) cout << Z[i].str() << endl;
+//
+//cout << "NK - ACTIONS" << endl;
+//for(unsigned int i = 0; i < NKA.size(); i++) cout << NKA[i].str() << endl;
+//
+//cout << "K - ACTIONS" << endl;
+//for(unsigned int i = 0; i < KA.size(); i++) cout << KA[i].str() << endl;
 
 	//Generate the transitions the result from the non-deterministic excution
 	//of actions in i_actions over the states in i_states
 	vector<Transition> T_trans = ds.generateTransitions(S,NKA,"#ink_f");
 	vector<Transition> O_trans = ds.generateTransitions(S,KA,"#ik_f");
 
-cout << "############################################################" << endl;
-cout << "T - TRANSITIONS" << endl;
-for(unsigned int i = 0; i < T_trans.size(); i++)
-{
-	T_trans[i].debug();
-	cout << "------------------------------------------------" << endl;
-}
-cout << "############################################################" << endl;
-cout << "O - TRANSITIONS" << endl;
-for(unsigned int i = 0; i < O_trans.size(); i++)
-{
-	O_trans[i].debug();
-	cout << "------------------------------------------------" << endl;
-}
+//cout << "############################################################" << endl;
+//cout << "T - TRANSITIONS" << endl;
+//for(unsigned int i = 0; i < T_trans.size(); i++)
+//{
+//	T_trans[i].debug();
+//	cout << "------------------------------------------------" << endl;
+//}
+//cout << "############################################################" << endl;
+//cout << "O - TRANSITIONS" << endl;
+//for(unsigned int i = 0; i < O_trans.size(); i++)
+//{
+//	O_trans[i].debug();
+//	cout << "------------------------------------------------" << endl;
+//}
 
 	//Create the execution-terminating actions
 	vector<string> ttt;
@@ -95,7 +81,7 @@ for(unsigned int i = 0; i < O_trans.size(); i++)
 	vector<Action> termA;
 	termA.push_back(ta);
 
-	//Concatenate Transition vectors
+	//Concatenate T-transition and O-transition vectors
 	vector<Transition> TO_trans;
 	TO_trans.insert(TO_trans.end(),T_trans.begin(),T_trans.end());
 	TO_trans.insert(TO_trans.end(),O_trans.begin(),O_trans.end());

@@ -631,3 +631,33 @@ sp::PState sp::subPstate(sp::DomainSort const &ds, sp::PState const &ps, std::ve
 	return sub_pstate;
 }
 
+unsigned long int sp::checkSum(std::string const &s)
+{
+	unsigned long int output = 0;
+	int len = s.length();
+
+	for(int i = 0; i < len; i++)
+	{
+		output += (static_cast<unsigned long int>(i+1) *
+			   static_cast<unsigned long int>(s[i]));
+	}
+
+	return output;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

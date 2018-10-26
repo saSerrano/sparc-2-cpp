@@ -47,6 +47,14 @@ namespace sp
 						      std::string const &pomdpFile,
 						      std::string const &statFile);
 
+			friend bool Pomdp::saveTD(std::vector<PState> const &S,
+					       std::vector<PState> const &Z,
+					       std::vector<Action> const &nkA,
+					       std::vector<Action> const &kA,
+					       std::vector<Action> const &termA,
+					       std::vector<Transition> const &T,
+					       std::string const &tdFile);
+
 		public:
 
 			/**
@@ -131,12 +139,30 @@ namespace sp
 			*/
 			bool setActionID(std::vector<Action> const &listOfActions);
 
+			/**
+			 * \brief This method is for checking this Transition's starting-state index, with respect the last vector of PState objects it was indexed over.
+			 * \return Returns the value of IndexPs0.
+			*/
 			int iS0() const;
 
+			/**
+			 * \brief This method is for checking this Transition's ending-state index, with respect the last vector of PState objects it was indexed over.
+			 * \return Returns the value of IndexPs1.
+			*/
 			int iS1() const;
 
+			/**
+			 * \brief This method is for checking this Transition's action index, with respect the last vector of Action objects it was indexed over.
+			 * \return Returns the value of IndexAction.
+			*/
 			int iA() const;
 
+			/**
+			 * \brief For each Transition object in 'T', this method assigns an ID number to its set of actions, its starting-state and its ending-state, according to the position these states and set of actions have in 'S' and 'A', respectively.
+			 * \param T Vector of Transition objects that willbe indexed over 'S' and 'A'.
+			 * \param S Vector of PState objects from which the Transition objects in 'T' will get their IndexPs0 and IndexPs1 values.
+			 * \param A Vector of Action objects from which the Transition objects in 'T' will get their IndexAction value.
+			*/
 			static void index(std::vector<Transition> &T, std::vector<PState> const &S, std::vector<Action> const &A);
 	};
 }

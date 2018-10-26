@@ -4,8 +4,12 @@
 #include <PState.hpp>
 #include <Action.hpp>
 #include <Transition.hpp>
+#include <iomanip>
 
-std::tuple<std::vector<int>,std::vector<std::string>> sp::Pomdp::getStats(std::string file,std::vector<std::string> const &actions,std::vector<std::string> const &states,std::vector<std::string> const &obs)
+std::tuple<std::vector<int>,std::vector<std::string>> sp::Pomdp::getStats(std::string file,
+							       std::vector<std::string> const &actions,
+							       std::vector<std::string> const &states,
+							       std::vector<std::string> const &obs)
 {
 	//Output tuple that will hold the stats and reward function
 	std::tuple<std::vector<int>,std::vector<std::string>> stats;
@@ -27,6 +31,7 @@ std::tuple<std::vector<int>,std::vector<std::string>> sp::Pomdp::getStats(std::s
 		if(line.find("T") != -1) lines.push_back(line);
 		else if(line.find("O") != -1) lines.push_back(line);
 		else if(line.find("R") != -1) lines.push_back(line);
+		else if(line.find("s") != -1) lines.push_back(line);
 		else if(line.find("0") != -1) lines.push_back(line);
 		else if(line.find("i") != -1) lines.push_back(line);
 		else if(line.find("1") != -1) lines.push_back(line);
@@ -39,8 +44,137 @@ std::tuple<std::vector<int>,std::vector<std::string>> sp::Pomdp::getStats(std::s
 	unsigned int row_c = 0;
 	for(unsigned int i = 0; i < lines.size(); i++)
 	{
+		//Extract a starting belief state
+		if(sp::startsWith(lines[i],"start:") 	     ||
+		   sp::startsWith(lines[i],"start include:") ||
+		   sp::startsWith(lines[i],"start exclude:")
+		)
+		{
+			//Split with ':' as delimiter
+			std::vector<std::string> tok_vec = sp::splitStr(lines[i],":");
+			if(tok_vec.size() != 2) continue;
+			tok_vec = sp::splitStr(tok_vec[1]," ");
+
+			//Empty definitions are not accepted
+			if(tok_vec.size() == 0) continue;
+			//Single element definitions
+			else if(tok_vec.size() == 1)
+			{
+				//Check for a specific starting-state using index
+				if(sp::isInt(tok_vec[0]))
+				{
+					int temp_int = std::stoi(tok_vec[0]);
+					if(temp_int >= 0 && temp_int < static_cast<int>(states.size()))
+					{
+						gathAction.push_back(-2);
+						gathMat.push_back(lines[i]);
+					}
+				}
+				//Check for the uniform distribution command
+				else if(tok_vec[0] == "uniform" && sp::startsWith(lines[i],"start:"))
+				{
+					gathAction.push_back(-2);
+					gathMat.push_back(lines[i]);
+				}
+				//Check for a specific starting-state using mnemonic state name
+				else
+				{
+					bool state_found = false;
+					for(unsigned int j = 0; j < states.size(); j++)
+					{
+						if(states[j] == tok_vec[0])
+						{
+							state_found = true;
+							break;
+						}
+					}
+
+					if(state_found)
+					{
+						gathAction.push_back(-2);
+						gathMat.push_back(lines[i]);
+					}
+				}
+			}
+			//Multiple elements definition
+			else
+			{
+				bool all_pos_float = true;
+				bool non_float = true;
+				double total_sum = 0;
+				for(unsigned int j = 0; j < tok_vec.size(); j++)
+				{
+					if(sp::isFloat(tok_vec[j]))
+					{
+						non_float = false;
+						double temp_d = std::stod(tok_vec[j]);
+						if(temp_d >= 0) total_sum += temp_d;
+						else all_pos_float = false;
+					}
+					else all_pos_float = false;
+				}
+
+				//Check an enumeration of probabilities for each state
+				if(all_pos_float && (total_sum == 1) && (tok_vec.size() == states.size()) && sp::startsWith(lines[i],"start:"))
+				{
+					gathAction.push_back(-2);
+					gathMat.push_back(lines[i]);
+				}
+				//Check for an enumeration of states
+				else if(non_float && (tok_vec.size() <= states.size()))
+				{
+					std::vector<int> int_state;
+					std::vector<int>::iterator i_it;
+					std::vector<std::string> str_state;
+					std::vector<std::string>::iterator s_it;
+					for(unsigned int j = 0; j < tok_vec.size(); j++)
+					{
+						//Check for states' indexes
+						if(sp::isInt(tok_vec[j]))
+						{
+							int temp_int = std::stoi(tok_vec[j]);
+							i_it = std::find(int_state.begin(),int_state.end(),temp_int);
+							if((temp_int >= 0) && (temp_int < states.size()) && (i_it == int_state.end()))
+							{
+								int_state.push_back(temp_int);
+							}
+						}
+						//Check for states' mnemonics
+						else
+						{
+							s_it = std::find(str_state.begin(),str_state.end(),tok_vec[j]);
+							if(s_it == str_state.end())
+							{
+								bool state_found = false;
+								for(unsigned int k = 0; k < states.size(); k++)
+								{
+									if(tok_vec[j] == states[k])
+									{
+										state_found = true;
+										break;
+									}
+								}
+								if(state_found) str_state.push_back(tok_vec[j]);
+							}
+						}
+					}
+
+					//If all the elements in tok_vec are non-repeated integers within [0,states.size())
+					//or non-repeated strings that are in 'states', is a valid enumeration
+					//Also, for the 'start exclude:' the additional restriction of: at least one state must be left out of the enumeration,
+					//that is, you cannot exclude all of the states.
+					if((int_state.size() == tok_vec.size() || str_state.size() == tok_vec.size()) &&
+					   (sp::startsWith(lines[i],"start include:") || (sp::startsWith(lines[i],"start exclude:") && tok_vec.size() < states.size()))
+					)
+					{
+						gathAction.push_back(-2);
+						gathMat.push_back(lines[i]);
+					}
+				}
+			}
+		}
 		//Extract a matrix of prob. for the T and O functions
-		if(lines[i].find("T") != -1 || lines[i].find("O") != -1)
+		else if(lines[i].find("T") != -1 || lines[i].find("O") != -1)
 		{
 			temp_s = "";
 			row_c =0;
@@ -219,7 +353,6 @@ std::tuple<std::vector<int>,std::vector<std::string>> sp::Pomdp::getStats(std::s
 					}
 				}
 			}
-//-------------------------------------------------------------------------------
 		}
 		//Extract a part of the R function
 		// -- Only the 1-line format is supported --
@@ -310,16 +443,53 @@ std::tuple<std::vector<int>,std::vector<std::string>> sp::Pomdp::getStats(std::s
 	return stats;
 }
 
+std::string sp::Pomdp::fluent2Cass(std::string const &str)
+{
+	std::string output("");
+
+	if(sp::startsWith(str,"val"))
+	{
+		//Initial checking for literals with 'val(F,B,I)' format
+		int lpc = sp::countOcc(str,"(");
+		int rpc = sp::countOcc(str,")");
+		int lp = str.find("(");
+		int rp = str.rfind(")");
+		if(lpc == 0 || lpc != rpc || rp <= lp) return output;
+
+		//Keep the fluent component of the literal
+		std::vector<std::string> t_vec;
+		t_vec = sp::splitStr(sp::strBtwn(str,lp,rp),",");
+		t_vec = sp::correctCommaSplit(t_vec);
+		if(t_vec.size() == 3) output = t_vec[0];
+		else return output;
+
+	}
+	else output = str;
+
+	//Substitute the '(', ')', and commas for '_'
+	int len = output.length();
+	for(int i = 0; i < len; i++)
+	{
+		if(output[i] == '(' || output[i] == ')' || output[i] == ',') output[i] = '_';
+	}
+
+	return output;
+}
+
 sp::Pomdp::Pomdp():
 discount(0.95),
 values("reward"),
-default_prob_T(0.8)
+default_prob_T(0.8),
+default_prob_O(0.8),
+float_precision(8)
 {
 }
 
 sp::Pomdp::Pomdp(double discount)
 {
 	default_prob_T = 0.8;
+	default_prob_O = 0.8;
+	float_precision = 8;
 	values = "reward";
 	if(discount >= 0 && discount <= 1) this->discount = discount;
 	else this->discount = 0.95;
@@ -328,6 +498,8 @@ sp::Pomdp::Pomdp(double discount)
 sp::Pomdp::Pomdp(std::string values)
 {
 	default_prob_T = 0.8;
+	default_prob_O = 0.8;
+	float_precision = 8;
 	discount = 0.95;
 	if(values == "reward" || values == "cost") this->values = values;
 	else this->values = "reward";
@@ -336,6 +508,8 @@ sp::Pomdp::Pomdp(std::string values)
 sp::Pomdp::Pomdp(double discount,std::string values)
 {
 	default_prob_T = 0.8;
+	default_prob_O = 0.8;
+	float_precision = 8;
 	if(discount >= 0 && discount <= 1) this->discount = discount;
 	else this->discount = 0.95;
 
@@ -343,7 +517,17 @@ sp::Pomdp::Pomdp(double discount,std::string values)
 	else this->values = "reward";
 }
 
-bool sp::Pomdp::setDiscount(double discount)
+double sp::Pomdp::getDiscount() const
+{
+	return discount;
+}
+
+std::string sp::Pomdp::getValues() const
+{
+	return values;
+}
+
+bool sp::Pomdp::setDiscount(double const &discount)
 {
 	if(discount >= 0 && discount <= 1)
 	{
@@ -354,7 +538,7 @@ bool sp::Pomdp::setDiscount(double discount)
 
 }
 
-bool sp::Pomdp::setValues(std::string values)
+bool sp::Pomdp::setValues(std::string const &values)
 {
 	if(values == "reward" || values == "cost")
 	{
@@ -362,6 +546,40 @@ bool sp::Pomdp::setValues(std::string values)
 		return true;
 	}
 	else return false;
+}
+
+double sp::Pomdp::getT() const
+{
+	return default_prob_T;
+}
+
+double sp::Pomdp::getO() const
+{
+	return default_prob_O;
+}
+
+bool sp::Pomdp::setT(double const &default_prob_T)
+{
+	bool set_success = false;
+	if(default_prob_T >= 0 && default_prob_T <= 1)
+	{
+		this->default_prob_T = default_prob_T;
+		set_success = true;
+	}
+
+	return set_success;
+}
+
+bool sp::Pomdp::setO(double const &default_prob_O)
+{
+	bool set_success = false;
+	if(default_prob_O >= 0 && default_prob_O <= 1)
+	{
+		this->default_prob_O = default_prob_O;
+		set_success = true;
+	}
+
+	return set_success;
 }
 
 bool sp::Pomdp::generatePomdp(std::vector<sp::PState> &S, 
@@ -375,13 +593,14 @@ bool sp::Pomdp::generatePomdp(std::vector<sp::PState> &S,
                               std::string const &statFile)
 {
 	//Input parameters checking
-	//if(S.size() == 0) return false;
-	//if(nkA.size() == 0) return false;
-	//if(kA.size() == 0) return false;
-	//if(termA.size() == 0) return false;
-	//if(Z.size() == 0) return false;
-	//if(T.size() == 0) return false;
-	//if(!ds.fileIsLoaded()) return false;
+	if(S.size() == 0) return false;
+	if(Z.size() == 0) return false;
+	if(nkA.size() == 0) return false;
+	if(kA.size() == 0) return false;
+	if(termA.size() == 0) return false;
+	if(T.size() == 0) return false;
+	if(!ds.fileIsLoaded()) return false;
+	if(pomdpFile.length() <= 0) return false;
 
 	//Add the "absorbing" state to S
 	S.push_back(sp::PState("{absb}"));
@@ -420,27 +639,6 @@ bool sp::Pomdp::generatePomdp(std::vector<sp::PState> &S,
 	AAA.insert(AAA.end(),termA.begin(),termA.end());
 	sp::Transition::index(T,SZ,AAA);
 
-//debug
-std::cout << "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$" << std::endl;
-std::cout << "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$" << std::endl;
-std::cout << "################  STATES  ##################" << std::endl;
-for(unsigned int i = 0; i < SZ.size(); i++)
-{
-std::cout << "State-" << i << ": " + SZ[i].str() << std::endl;
-}
-std::cout << "################  ACTIONS  ##################" << std::endl;
-for(unsigned int i = 0; i < AAA.size(); i++)
-{
-std::cout << "Action-" << i << ": " + AAA[i].str() << std::endl;
-}
-std::cout << "################  TRANSITIONS  ##################" << std::endl;
-for(unsigned int i = 0; i < T.size(); i++)
-{
-T[i].debug();
-std::cout << "----------------------------------------" << std::endl;
-}
-
-
 	//Create the pomdp file
 	std::ofstream outf;
 	outf.open(pomdpFile,std::ofstream::out);
@@ -448,9 +646,9 @@ std::cout << "----------------------------------------" << std::endl;
 
 	outf << "discount: " << discount << std::endl;
 	outf << "values: " << values << std::endl;
-
 	//---------------------------------------------------------------------------------------------
 	//STATES
+
 	std::vector<std::string> states_vec;
 	outf << "states: ";
 	for(unsigned int i = 0; i < S.size(); i++)
@@ -463,16 +661,17 @@ std::cout << "----------------------------------------" << std::endl;
 		for(unsigned int j = 0; j <  lits_vec.size(); j++)
 		{
 			if(j > 0) temp_state_str += "-";
-			temp_state_str += lits_vec[j];
+			temp_state_str += fluent2Cass(lits_vec[j]);
 		}
-
 		states_vec.push_back(temp_state_str);
 		outf << temp_state_str + " ";
 	}
 	outf << std::endl;
 	//---------------------------------------------------------------------------------------------
 	//ACTIONS: knA, kA, and termA
+
 	std::vector<std::string> action_vec;
+	std::vector<std::string> form_action_vec;
 	outf << "actions: ";
 	for(unsigned int i = 0; i < AAA.size(); i++)
 	{
@@ -502,13 +701,16 @@ std::cout << "----------------------------------------" << std::endl;
 				temp_a_str += ")";
 			}
 		}
+		std::string form_temp_a_str(fluent2Cass(temp_a_str));
+		form_action_vec.push_back(form_temp_a_str);
 		action_vec.push_back(temp_a_str);
-		outf << temp_a_str;
+		outf << form_temp_a_str;
 		outf << " ";
 	}
 	outf << std::endl;
 	//---------------------------------------------------------------------------------------------
 	//OBSERVATIONS
+
 	std::vector<std::string> obs_vec;
 	outf << "observations: ";
 	for(unsigned int i = 0; i < Z.size(); i++)
@@ -520,283 +722,655 @@ std::cout << "----------------------------------------" << std::endl;
 		std::string temp_obs_str("");
 		for(unsigned int j = 0; j <  lits_vec.size(); j++)
 		{
-			if(j > 0) temp_obs_str += "-";
-			temp_obs_str += lits_vec[j];
+			if(j > 0) temp_obs_str += "-_-";
+			temp_obs_str += fluent2Cass(lits_vec[j]);
 		}
 
 		obs_vec.push_back(temp_obs_str);
 		outf << temp_obs_str + " ";
 	}
-	outf << std::endl << std::endl;
-
-//debug
-outf.close();
-return true;
-
+	outf << std::endl;
 	//---------------------------------------------------------------------------------------------
-//TRANSITION FUNCTION
+	//STARTING BELIEF STATE
 
-//By default the probability assigned to a transition is:
-// 0.8 if the ending state corresponds to the state reached by the deterministic causal law, i.e. the correct transition.
-// The other 0.2 is distributed over the rest of the ending states reached by that action.
+	//Extract from the statFile the statistic and value specifications for the T, O, and R functions
+	std::tuple<std::vector<int>,std::vector<std::string>> stats;
+	stats = getStats(statFile,action_vec,states_vec,obs_vec);
 
-// The transitions in T are indexed over the vectors resulting by:
-// - States: [S,Z]
-// - Actions: [nkA,kA,termA]
-
-
-unsigned int lastNKA = nkA.size()-1;
-unsigned int lastKA = kA.size() + lastNKA;
-for(unsigned int i = 0; i < action_vec.size(); i++)
-{
-std::cout << "ACTION-" << i << std::endl;
-	if(i <= lastNKA) //Non-knowledge producing actions have effect in the T function
+	//Get the last start belief state definition gathered from the statistics file
+	int sbs = -1;
+	for(int i = std::get<0>(stats).size()-1; i >= 0 ; i--)
 	{
-		outf << "\n\nT:" + action_vec[i] << std::endl;
-
-		//Iterate over the rows of the matrix
-		for(unsigned int j = 0; j < S.size(); j++)
+		if(std::get<0>(stats)[i] == -2)
 		{
-std::cout << "STATES0-" << j << std::endl;
-			//Gather all the transitions that start in the j-th state and have the i-th action
-			std::vector<int> relT;
-			for(unsigned int k = 0; k < T.size(); k++)
-			{
-std::cout << T[k].iS0() << "," << T[k].iA() << "," << T[k].iS1();
+			sbs = i;
+			break;
+		}
+	}
 
-				if(T[k].iA() == static_cast<int>(i) && T[k].iS0() == static_cast<int>(j))
-{
-					relT.push_back(k);
-std::cout << " +++++++" << std::endl;
-}
-else std::cout << " x" << std::endl;
-			}
+	//Use the SBS definition provided from the statistics file
+	if(sbs > -1) outf << std::get<1>(stats)[sbs] << std::endl << std::endl;
+	//Use the default SBS definition
+	else outf << "start: uniform" << std::endl << std::endl;
+	//---------------------------------------------------------------------------------------------
+	//TRANSITION FUNCTION
 
-			//There are no transitions with these S0 & A
-			if(relT.size() == 0)
+	//By default the probability assigned to a transition is:
+	// 0.8 if the ending state corresponds to the state reached by the deterministic causal law, i.e. the correct transition.
+	// The other 0.2 is distributed over the rest of the ending states reached by that action.
+
+	// The transitions in T are indexed over the vectors resulting by:
+	// - States: [S,Z]
+	// - Actions: [nkA,kA,termA]
+
+	//Build the T-transition matrix for each action
+	unsigned int lastNKA = nkA.size()-1;
+	unsigned int lastKA = kA.size() + lastNKA;
+	for(unsigned int i = 0; i < action_vec.size(); i++)
+	{
+		//Check if the i-th action's matrix for the T-function was extracted from the statFile
+		bool action_from_file = false;
+		for(unsigned int j = 0; j < std::get<0>(stats).size(); j++)
+		{
+			//The j-th index corresponds to the i-th action
+			if(i == std::get<0>(stats)[j])
 			{
-std::cout << "No relevant transitions" << std::endl;
-				//The i-th action has no effect over the j-th state
-				for(unsigned int k = 0; k < S.size(); k++)
+				//The matrix is for the T-function
+				if(std::get<1>(stats)[j].substr(0,1) == "T")
 				{
-					if(k > 0) outf << " ";
-
-					if(k == j) outf << "1";
-					else outf << "0";
-				}
-				outf << std::endl;
-
-				//The j-th row of the i-th matrix is complete, onto the next one
-				continue;
-			}
-
-			//This is a deterministic transition
-			if(relT.size() == 1)
-			{
-std::cout << "A single relevant transition" << std::endl;
-				for(unsigned int k = 0; k < S.size(); k++)
-				{
-					if(k > 0) outf << " ";
-
-					if(T[relT[0]].iS1() == static_cast<int>(k)) outf << "1";
-					else outf << "0";
-				}
-				outf << std::endl;
-
-				//The j-th row of the i-th matrix is complete, onto the next one
-				continue;
-			}
-
-std::cout << relT.size() << " relevant transitions" << std::endl;
-			//Create a copy of the original SPARC file to find the deterministic transition
-			sp::shellCmd("cp "+ds.SourceFile+" temp_sp_file.sp");
-			std::ofstream temf;
-			temf.open("temp_sp_file.sp",std::ofstream::app);
-			if(!temf.is_open())
-			{
-				outf.close();
-				return false;
-			}
-			//Add j-th S0 to the copy file
-			int state_len = S[j].str().length();
-			std::string all_lits = S[j].str().substr(1,state_len-2);
-			std::vector<std::string> lits_vec = splitStr(all_lits,",");
-			lits_vec = correctCommaSplit(lits_vec);
-			for(unsigned int k = 0; k < lits_vec.size(); k++) temf << lits_vec[k]+".\n";
-			//Add the i-th action to the copy file
-			std::vector<std::string> temp_a_vec = sp::splitStr(action_vec[i],"-");
-			for(unsigned int k = 0; k < temp_a_vec.size(); k++)
-			{
-				temf << "occurs("+temp_a_vec[k]+",0).\n";
-			}
-			//Add the display command to filter the output
-			temf << "display\n";
-			temf << "val(F,true,1).\n";
-			temf.close();
-			//Compute the answer-sets
-			sp::shellCmd("java -jar " + std::string(PATH_TO_SPARC) + " temp_sp_file.sp -A > temp_AS.txt");
-			//Extract the reached state from the answer-set file
-			std::vector<sp::PState> temp_S1 = sp::pstatesFromFile("temp_AS.txt");
-			//Delete both temporal files
-			sp::shellCmd("rm temp_sp_file.sp temp_AS.txt");
-
-			//From the relevant transitions find the one that matches the deterministic transition
-			int detT = -1;
-std::cout << ">> Iterating over relevant transitions: ";
-			for(unsigned int k = 0; k < relT.size(); k++)
-			{
-std::cout << relT[k] << ", ";
-
-				//Change the step value of every literal in temp_S1[0] to 0
-				for(unsigned int l = 0; l < temp_S1[0].LitNames.size(); l++)
-				{
-					for(unsigned int m = 0; m < temp_S1[0].LitArgs[l].size(); m++)
-					{
-						//That last argument that is "1" is changed to "0"
-						if((temp_S1[0].LitArgs[l][m] == "1") && (m == temp_S1[0].LitArgs[l].size()-1))
-							temp_S1[0].LitArgs[l][m] = "0";
-					}
-				}
-
-
-				//Check for the deterministic reached state S1
-				if(temp_S1[0].contains(S[T[relT[k]].iS1()]))
-				{
-					detT = relT[k];
+					//Write the matrix in the POMDP file
+					outf << std::get<1>(stats)[j] << "\n";
+					action_from_file = true;
 					break;
 				}
 			}
-std::cout << std::endl;
-std::cout << ">> detT: " << detT << std::endl;
+		}
+		if(action_from_file) continue;
 
-			//Assign the probabilities for the j-th row
-			double others_t_prob = (1 - default_prob_T) / static_cast<double>(relT.size()-1);
-			for(unsigned int k = 0; k < S.size(); k++)
+		//Non-knowledge producing actions have effect in the T function
+		if(i <= lastNKA) 
+		{
+			outf << "T: " + form_action_vec[i] << std::endl;
+
+			//Iterate over the rows of the matrix
+			for(unsigned int j = 0; j < S.size(); j++)
 			{
-				if(k > 0) outf << " ";
-
-				//The det. transition
-				if(k == T[detT].iS1())
+				//Gather all the transitions that start in the j-th state and have the i-th action
+				std::vector<int> relT;
+				for(unsigned int k = 0; k < T.size(); k++)
 				{
-					outf << default_prob_T;
+
+					if(T[k].iA() == static_cast<int>(i) && T[k].iS0() == static_cast<int>(j))
+					{
+						relT.push_back(k);
+					}
+				}
+
+				//There are no transitions with these S0 & A
+				if(relT.size() == 0)
+				{
+					//The i-th action has no effect over the j-th state
+					for(unsigned int k = 0; k < S.size(); k++)
+					{
+						if(k > 0) outf << " ";
+
+						if(k == j) outf << "1";
+						else outf << "0";
+					}
+					outf << std::endl;
+
+					//The j-th row of the i-th matrix is complete, onto the next one
 					continue;
 				}
 
-				bool k_is_rel = false;
-				for(unsigned int l = 0; l < relT.size(); l++)
+				//This is a deterministic transition
+				if(relT.size() == 1)
 				{
-					//A non-det. but relevant transition
-					if(k == T[relT[l]].iS1())
+					for(unsigned int k = 0; k < S.size(); k++)
 					{
-						outf << others_t_prob;
-						k_is_rel = true;
-						break;
+						if(k > 0) outf << " ";
+
+						if(T[relT[0]].iS1() == static_cast<int>(k)) outf << "1";
+						else outf << "0";
 					}
+					outf << std::endl;
+
+					//The j-th row of the i-th matrix is complete, onto the next one
+					continue;
 				}
 
-				//A not relevant transition
-				if(!k_is_rel) outf << "0";
+				//Write the default probabilities using the detemrinistic causal laws
+				//and the default_prob_T private memeber 
+				std::vector<sp::PState> emptyZ;
+				writeDefMat(ds.SourceFile,j,action_vec[i],S,emptyZ,T,relT,outf);
 			}
+
 			outf << std::endl;
 		}
-	}
-	else if(i <= lastKA) //Knowledge producing actions do not have effect in the T function
-	{
-		outf << "T:" + action_vec[i] << std::endl;
-		outf << "identity" << std::endl << std::endl;
-	}
-	else //POMDP execution termination actions
-	{
-		//Tarminate actions always trasit the system to the absorbing state absb
-		outf << "T: " + action_vec[i] + " : * : absb 1" << std::endl;
-	}
-}
-	//---------------------------------------------------------------------------------------------
-//OBSERVATION FUNCTION
-
-for(unsigned int i = 0; i < action_vec.size(); i++)
-{
-	if(i >= lastNKA) //Knowledge producing actions have effect in the O function
-	{
-		//Save those states for which the i-th action cannot generate any observation
-		std::vector<int> stateNoObs;
-
-		//Itareate over the states (rows)
-		for(unsigned int j = 0; j < S.size(); j++)
+		//Knowledge producing actions do not have effect in the T function
+		else if(i <= lastKA) 
 		{
-			//Gather those transitions of the form S[j]-A[i]-Z[*]
-			std::vector<int> relT;
-			for(unsigned int k = 0; k < Z.size(); k++)
-			{
-				if(T[k].iS0() == static_cast<int>(j) &&
-				   T[k].iA() == static_cast<int>(i))
-					relT.push_back(k);
-			}
+			outf << "T: " + form_action_vec[i] << std::endl;
+			outf << "identity" << std::endl << std::endl;
+		}
+		//POMDP execution termination actions
+		else 
+		{
+			//Tarminate actions always trasit the system to the absorbing state absb
+			outf << "T: " + form_action_vec[i] + " : * : absb 1" << std::endl << std::endl;
+		}
+	}
 
-			//No observation can be generated from state-j and action-i
-			if(relT.size() == 0)
+	//---------------------------------------------------------------------------------------------
+	//OBSERVATION FUNCTION
+
+	for(unsigned int i = 0; i < action_vec.size(); i++)
+	{
+		//Check if the i-th action's matrix for the T-function was extracted from the statFile
+		bool action_from_file = false;
+		for(unsigned int j = 0; j < std::get<0>(stats).size(); j++)
+		{
+			//The j-th index corresponds to the i-th action
+			if(i == std::get<0>(stats)[j])
 			{
-				//The values of this row will be later overwritten
-				stateNoObs.push_back(j);
-				for(unsigned k = 0; k < Z.size(); k++)
+				//The matrix is for the O-function
+				if(std::get<1>(stats)[j].substr(0,1) == "O")
 				{
-					if(k > 0) outf << " ";
-
-					if(k == 0) outf << "1";
-					else outf << "0";
+					//Write the matrix in the POMDP file
+					outf << std::get<1>(stats)[j] << "\n";
+					action_from_file = true;
+					break;
 				}
-				outf << std::endl;
 			}
+		}
+		if(action_from_file) continue;
+
+		//Knowledge producing actions have effect in the O-function
+		if(i > lastNKA && i <= lastKA)
+		{
+			outf << "O: " + form_action_vec[i] << std::endl;
+
+			//Itareate over the states (rows)
+			for(unsigned int j = 0; j < S.size(); j++)
+			{
+				//Gather those transitions of the form S[j]-A[i]-Z[*]
+				std::vector<int> relT;
+				for(unsigned int k = 0; k < T.size(); k++)
+				{
+					if(T[k].iS0() == static_cast<int>(j) &&
+					   T[k].iA() == static_cast<int>(i))
+						relT.push_back(k);
+				}
+
+				//No observation can be generated from state-j and action-i
+				if(relT.size() == 0)
+				{
+					for(unsigned k = 0; k < Z.size(); k++)
+					{
+						if(k > 0) outf << " ";
+
+						//Observation 'none' gets 1 of probability, that is,
+						//the last element of 'Z'
+						if(k == (Z.size()-1)) outf << "1";
+						else outf << "0";
+					}
+					outf << std::endl;
+					continue;
+				}
+
+				//A single observation is generated deterministially
+				//from state-j and action-i
+				if(relT.size() == 1)
+				{
+					for(unsigned int k = 0; k < Z.size(); k++)
+					{
+						if(k > 0) outf << " ";
+
+						//Given that 'T' was indexed over [S,Z], the size of 'S'
+						//must be substracted in order for an index of 'Z' to
+						// match
+						int rel_index = T[relT[0]].iS1() - S.size();
+
+						if(rel_index == static_cast<int>(k)) outf << "1";
+						else outf << "0";
+					}
+					outf << std::endl;
+					continue;
+				}
+
+				//Write the default probabilities using the detemrinistic causal laws
+				//and the default_prob_O private memeber 
+				writeDefMat(ds.SourceFile,j,action_vec[i],S,Z,T,relT,outf);
+			}
+
+			outf << std::endl;
+		}
+		//Non-knowledge producing and termination actions do not have effect in the O function
+		else 
+		{
+			// The probability of generating "none" observation by executing a
+			// non-knowledge producing action or a termination from any state, is 1.
+			// That is, non-know. producing actions do not generate observations
+			// O: kn-action : * : none 1
+			outf << "O: " + form_action_vec[i] + " : * : none 1" << std::endl << std::endl;
+		}
+	}
+
+	//---------------------------------------------------------------------------------------------
+	//REWARD FUNCTION
+
+	for(unsigned int i = 0; i < std::get<0>(stats).size(); i++)
+	{
+		//Get each reward function specification
+		if(std::get<0>(stats)[i] == -1)
+		{
+			outf << std::get<1>(stats)[i] << "\n\n";
+		}
+	}
+	//---------------------------------------------------------------------------------------------
+
+	//Close the pomdp file
+	outf.close();
+
+	return true;
+}
+
+void sp::Pomdp::writeDefMat(std::string const &sparcF,
+			    int const &s0,
+			    std::string const &a_str,
+			    std::vector<PState> const &S,
+			    std::vector<PState> const &Z,
+			    std::vector<Transition> const &T,
+			    std::vector<int> const &relT,
+			    std::ofstream &outf)
+{
+	//Create a copy of the original SPARC file to find the deterministic transition
+	sp::shellCmd("rm temp_sp_file.sp");
+	sp::shellCmd("cp "+sparcF+" temp_sp_file.sp");
+	std::ofstream temf;
+	temf.open("temp_sp_file.sp",std::ofstream::app);
+	if(!temf.is_open())
+	{
+		return;
+	}
+
+	//Add the S0 state to the copy file
+	int state_len = S[s0].str().length();
+	std::string all_lits = S[s0].str().substr(1,state_len-2);
+	std::vector<std::string> lits_vec = sp::splitStr(all_lits,",");
+	lits_vec = sp::correctCommaSplit(lits_vec);
+	for(unsigned int i = 0; i < lits_vec.size(); i++) temf << lits_vec[i]+".\n";
+
+	//Add the action to the copy file
+	std::vector<std::string> temp_a_vec = sp::splitStr(a_str,"-");
+	for(unsigned int i = 0; i < temp_a_vec.size(); i++)
+	{
+		temf << "occurs("+temp_a_vec[i]+",0).\n";
+	}
+
+	//Add the display command to filter the output
+	temf << "display\n";
+	temf << "val(F,true,1).\n";
+	temf.close();
+
+	//Compute the answer-sets
+	sp::shellCmd("java -jar " + std::string(PATH_TO_SPARC) + " temp_sp_file.sp -A > temp_AS.txt");
+	//Extract the reached state from the answer-set file
+	std::vector<sp::PState> temp_S1 = sp::pstatesFromFile("temp_AS.txt");
+	//Delete both temporal files
+	sp::shellCmd("rm temp_sp_file.sp temp_AS.txt");
+
+	//Change the step value of every literal in temp_S1[0] to 0
+	for(unsigned int j = 0; j < temp_S1[0].LitNames.size(); j++)
+	{
+		for(unsigned int k = 0; k < temp_S1[0].LitArgs[j].size(); k++)
+		{
+			//That last argument that is "1" is changed to "0"
+			if((temp_S1[0].LitArgs[j][k] == "1") && (k == temp_S1[0].LitArgs[j].size()-1))
+			{
+				temp_S1[0].LitArgs[j][k] = "0";
+			}
+		}
+	}
+
+	//From the relevant transitions find the one that matches the deterministic transition
+	int detT = -1;
+	for(unsigned int i = 0; i < relT.size(); i++)
+	{
+		//Check for the deterministic reached state S1
+		if(Z.size() == 0)
+		{
+			if(temp_S1[0].contains(S[T[relT[i]].iS1()]))
+			{
+				detT = relT[i];
+				break;
+			}
+		}
+		else
+		{
+			if(temp_S1[0].contains(Z[T[relT[i]].iS1() - S.size()]))
+			{
+				detT = relT[i];
+				break;
+			}
+		}
+	}
+
+	double default_prob = 0;
+	double others_prob = 0;
+	int nCols = 0;
+	int offset = 0;
+	//T-function is being built
+	if(Z.size() == 0)
+	{
+		default_prob = default_prob_T;
+		others_prob = (1 - default_prob_T) / static_cast<double>(relT.size()-1);
+		nCols = S.size();
+	}
+	//O-function is being built
+	else
+	{
+		default_prob = default_prob_O;
+		others_prob = (1 - default_prob_O) / static_cast<double>(relT.size()-1);
+		nCols = Z.size();
+		offset = S.size();
+	}
+
+	//Assign the probaibilities for the s0-state's row
+	outf << std::fixed << std::setprecision(float_precision);
+	for(int i = 0; i < nCols; i++)
+	{
+		if(i > 0) outf << " ";
+
+		//The det. transition
+		if((i + offset) == T[detT].iS1())
+		{
+			outf << default_prob;
+			continue;
+		}
+
+		bool i_is_rel = false;
+		for(unsigned int l = 0; l < relT.size(); l++)
+		{
+			//A non-det. but relevant transition
+			if((i + offset) == T[relT[l]].iS1())
+			{
+				outf << others_prob;
+				i_is_rel = true;
+				break;
+			}
+		}
+
+		//A not relevant transition
+		if(!i_is_rel) outf << "0";
+	}
+	outf << std::endl;
+
+	return;
+}
+
+
+bool sp::Pomdp::saveTD(std::vector<PState> const &S,
+	    	       std::vector<PState> const &Z,
+	    	       std::vector<Action> const &nkA,
+	    	       std::vector<Action> const &kA,
+	    	       std::vector<Action> const &termA,
+	    	       std::vector<Transition> const &T,
+	    	       std::string const &tdFile)
+{
+	//Create the transition-diagram file
+	std::ofstream outf;
+	outf.open(tdFile,std::ofstream::out);
+
+	//Initial verification
+	if(!outf.is_open()   ||
+	   S.size()     == 0 ||
+	   Z.size()     == 0 ||
+	   nkA.size()   == 0 ||
+	   kA.size()    == 0 ||
+	   termA.size() == 0 ||
+	   T.size()     == 0
+	)
+	{
+		return false;
+	}
+
+	std::vector<std::string> headlines;
+	headlines.push_back("TD - STATES:");
+	headlines.push_back("TD - OBSERVATIONS:");
+	headlines.push_back("TD - NON-KNOWLEGDE-PROD-ACTIONS:");
+	headlines.push_back("TD - KNOWLEGDE-PROD-ACTIONS:");
+	headlines.push_back("TD - TERMINATION-ACTIONS:");
+	headlines.push_back("TD - TRANSITIONS:");
+	std::vector<unsigned long int> headlinesNum;
+	headlinesNum.push_back(1);
+	headlinesNum.push_back(headlinesNum[headlinesNum.size()-1] + 1 + S.size());
+	headlinesNum.push_back(headlinesNum[headlinesNum.size()-1] + 1 + Z.size());
+	headlinesNum.push_back(headlinesNum[headlinesNum.size()-1] + 1 + nkA.size());
+	headlinesNum.push_back(headlinesNum[headlinesNum.size()-1] + 1 + kA.size());
+	headlinesNum.push_back(headlinesNum[headlinesNum.size()-1] + 1 + termA.size());
+
+	//Start computing the file's checksum
+	unsigned long int cs = 0;
+	for(unsigned int i = 0; i < headlines.size(); i++)
+	{
+		cs += (headlinesNum[i] * sp::checkSum(headlines[i]));
+	}
+
+	//Save all states in 'S'
+	outf << headlines[0] << std::endl;
+	for(unsigned int i = 0; i < S.size(); i++)
+	{
+		outf << S[i].str() << std::endl;
+
+		//Compute checksum for each line
+		cs += ((headlinesNum[0]+i+1) * sp::checkSum(S[i].str()));
+	}
+
+	//Save all observations in 'Z'
+	outf << headlines[1] << std::endl;
+	for(unsigned int i = 0; i < Z.size(); i++)
+	{
+		outf << Z[i].str() << std::endl;
+
+		//Compute checksum for each line
+		cs += ((headlinesNum[1]+i+1) * sp::checkSum(Z[i].str()));
+	}
+
+	//Save all non-knowledge producing actions in 'nkA'
+	outf << headlines[2] << std::endl;
+	for(unsigned int i = 0; i < nkA.size(); i++)
+	{
+		outf << nkA[i].str() << std::endl;
+
+		//Compute checksum for each line
+		cs += ((headlinesNum[2]+i+1) * sp::checkSum(nkA[i].str()));
+	}
+
+	//Save all knowledge producing actions in 'kA'
+	outf << headlines[3] << std::endl;
+	for(unsigned int i = 0; i < kA.size(); i++)
+	{
+		outf << kA[i].str() << std::endl;
+
+		//Compute checksum for each line
+		cs += ((headlinesNum[3]+i+1) * sp::checkSum(kA[i].str()));
+	}
+
+	//Save all execution termination actions in 'termA'
+	outf << headlines[4] << std::endl;
+	for(unsigned int i = 0; i < termA.size(); i++)
+	{
+		outf << termA[i].str() << std::endl;
+
+		//Compute checksum for each line
+		cs += ((headlinesNum[4]+i+1) * sp::checkSum(termA[i].str()));
+	}
+
+	//Save all the transitions in 'T'
+	outf << headlines[5] << std::endl;
+	for(unsigned int i = 0; i < T.size(); i++)
+	{
+		outf << T[i].ps0.str() << std::endl;
+		outf << T[i].SetofActions.str() << std::endl;
+		outf << T[i].ps1.str() << std::endl;
+
+		//Compute checksum for each line
+		cs += ((headlinesNum[5]+(i*3)+1) * sp::checkSum(T[i].ps0.str()));
+		cs += ((headlinesNum[5]+(i*3)+2) * sp::checkSum(T[i].SetofActions.str()));
+		cs += ((headlinesNum[5]+(i*3)+3) * sp::checkSum(T[i].ps1.str()));
+	}
+
+	//Save the resulting checksum value
+	outf << cs;
+
+	//Close the transition-diagram file
+	outf.close();
+
+	return true;
+}
+
+bool sp::Pomdp::loadTD(std::vector<PState> &S,
+		       std::vector<PState> &Z,
+	    	       std::vector<Action> &nkA,
+	    	       std::vector<Action> &kA,
+	    	       std::vector<Action> &termA,
+	    	       std::vector<Transition> &T,
+	    	       std::string const &tdFile)
+{
+	//Check for a valid file
+	std::ifstream infile;
+	infile.open(tdFile,std::ifstream::in);
+	if(!infile.is_open()) return false;
+
+	//Read the file
+	std::string line;
+	std::vector<std::string> lines;
+	while(std::getline(infile,line)) lines.push_back(line);
+	infile.close();
+
+	//Perform the checksum verification
+	std::string cs_str = lines[lines.size()-1];
+	if(!sp::isInt(cs_str)) return false;
+	unsigned long int cs = std::stoul(cs_str);
+	unsigned long int file_cs = 0;
+	for(unsigned int i = 0; i < lines.size()-1; i++)
+	{
+		file_cs += ((i+1) * sp::checkSum(lines[i]));
+	}
+	if(cs != file_cs) return false;
+
+	//Clean-up the output vectors
+	S.clear();
+	Z.clear();
+	nkA.clear();
+	kA.clear();
+	termA.clear();
+	T.clear();
+
+	//Extract the transition diagram
+	int phase = 0;
+	sp::PState t_ps0;
+	sp::Action t_action;
+	int t_count = 0;
+	for(unsigned int i = 0; i < lines.size(); i++)
+	{
+		if(lines[i] == "TD - STATES:")
+		{
+			phase = 1;
+			continue;
+		}
+		else if(lines[i] == "TD - OBSERVATIONS:")
+		{
+			phase = 2;
+			continue;
+		}
+		else if(lines[i] == "TD - NON-KNOWLEGDE-PROD-ACTIONS:")
+		{
+			phase = 3;
+			continue;
+		}
+		else if(lines[i] == "TD - KNOWLEGDE-PROD-ACTIONS:")
+		{
+			phase = 4;
+			continue;
+		}
+		else if(lines[i] == "TD - TERMINATION-ACTIONS:")
+		{
+			phase = 5;
+			continue;
+		}
+		else if(lines[i] == "TD - TRANSITIONS:")
+		{
+			phase = 6;
+			continue;
+		}
+
+		//States or Observations
+		if(phase == 1 || phase == 2)
+		{
+			sp::PState temp_ps(lines[i]);
+			if(phase == 1) S.push_back(temp_ps);//States are being readed
+			else if(phase == 2) Z.push_back(temp_ps);//Observations are being readed
+		}
+		//NK, K, or Term. actions
+		else if(phase >= 3 && phase <= 5)
+		{
+			int lb = lines[i].find("{");
+			int rb = lines[i].find("}");
+			std::string lits_str = sp::strBtwn(lines[i],lb,rb);
+			std::vector<std::string> a_vec = sp::splitStr(lits_str,",");
+			a_vec = sp::correctCommaSplit(a_vec);
+			sp::Action temp_a(a_vec);
+
+			if(phase == 3) nkA.push_back(temp_a);//NK-actions are being readed
+			else if(phase == 4) kA.push_back(temp_a);//K-actions are being readed
+			else if(phase == 5) termA.push_back(temp_a);//Termination-actions are being readed
+		}
+		//Transitions are being readed
+		else if(phase == 6 && sp::startsWith(lines[i],"{"))
+		{
+			//Read state-0
+			if(t_count == 0)
+			{
+				t_count++;
+				t_ps0.set(lines[i]);
+			}
+			//Read action
+			else if(t_count == 1)
+			{
+				t_count++;
+				int lb = lines[i].find("{");
+				int rb = lines[i].find("}");
+				std::string lits_str = sp::strBtwn(lines[i],lb,rb);
+				std::vector<std::string> a_vec = sp::splitStr(lits_str,",");
+				a_vec = sp::correctCommaSplit(a_vec);
+				t_action.set(a_vec);
+			}
+			//Read state-1
 			else
 			{
-				//Compute the probability to be assigned to each valid transition
-				double saz_prob = 1 / static_cast<double>(relT.size());
-				for(unsigned int k = 0; k < Z.size(); k++)
-				{
-					if(k > 0) outf << " ";
-
-					//Check if S[j]-A[i]-Z[k] is in relT
-					bool saz_is_valid = false;
-					for(unsigned int l = 0; l < relT.size(); l++)
-					{
-						//k + S.size(), offset is required due to T is indexed over [S + Z]
-						if(T[relT[l]].iS1() == (k + S.size()))
-						{
-							saz_is_valid = true;
-							break;
-						}
-					}
-
-					//Assign the probability
-					if(saz_is_valid) outf << saz_prob;
-					else outf << "0";
-				}
-				outf << std::endl;
+				t_count = 0;
+				sp::PState temp_ps1(lines[i]);
+				sp::Transition temp_t(t_action,t_ps0,temp_ps1);
+				T.push_back(temp_t);
 			}
 		}
+	}
 
-		// For those states that the i-th action cannot generate any observation,
-		// overwrite their row of probabilities with O: i-th-action : j-th-state : none 1
-		for(unsigned int j = 0; j < stateNoObs.size(); j++)
-		{
-			outf << "O: " + action_vec[i] + " : " + states_vec[stateNoObs[j]] + " : none 1";
-			outf << std::endl;
-		}
-	}
-	else //Non-knowledge producing actions do not have effect in the O function
-	{
-		// The probability of generating "none" observation by executing a
-		// non-knowledge producing action from any state, is 1.
-		// That is, non-know. producing actions do not generate observations
-		// O: kn-action : * : none 1
-		outf << "O: " + action_vec[i] + " : * : none 1" << std::endl << std::endl;
-	}
+	return true;
 }
 
-//debug
-outf.close();
+bool sp::Pomdp::whatStats(std::vector<PState> const &S,
+		          std::vector<PState> const &Z,
+	    	          std::vector<Action> const &nkA,
+	    	          std::vector<Action> const &kA,
+	    	          std::vector<Transition> const &T,
+	    	          std::string const &tdFile)
+{
 return true;
 }
+
 
 
 

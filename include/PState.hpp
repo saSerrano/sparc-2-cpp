@@ -62,6 +62,15 @@ namespace sp
 						      std::string const &pomdpFile,
 						      std::string const &statFile);
 
+			friend void Pomdp::writeDefMat(std::string const &sparcF,
+						    int const &s0,
+						    std::string const &a_str,
+						    std::vector<PState> const &S,
+						    std::vector<PState> const &Z,
+						    std::vector<Transition> const &T,
+						    std::vector<int> const &relT,
+						    std::ofstream &outf);
+
 		public:
 
 			/**

@@ -144,6 +144,12 @@ namespace sp
 	*/
 	PState subPstate(DomainSort const &ds, PState const &ps, std::vector<std::string> const &defs);
 
+	/**
+	 * \brief This method computes a sum for an input string, for the purpose of checking if the input string has been modified. The check-sum is computed by adding the decimal value of each of the input string's character, also, these decimal values are weighted by the character's position within the input string, where the first position is 1.
+	 * \param s String for which the check-sum will be computed.
+	 * \return Returns the value corresponding to input string's checksum.
+	*/
+	unsigned long int checkSum(std::string const &s);
 }
 
 #endif
