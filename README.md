@@ -23,13 +23,13 @@ Given that the project is in a permanent state of development, it is important t
 
 > **Predicate occurs for events and actions**: The predicate occurs(#action,#step) represents when an action happened at a given time. For instance, occurs(start_engine(mustang),2) says that at time step 2 the mustang's engine was started.
 
-* **1-level arguments at most**: The current implementation is limited to parse sorts that have at most arguments that in their own have no arguments, for instance see the following examples:
+* **2-level arguments at most**: The current implementation is limited to parse sorts that have at most arguments that in their own have arguments, for instance see the following examples:
 
-> **Supported sort definitions**: #sort_a = a1(#motorcycle) + {a2, a3}.
+> **Supported sort definitions**: #sort_b = b2(#sort_a), where #sort_a = a1(#motorcycle) + {a2, a3}.
 
-> **Unsupported sort definitions**: #sort_b = b2(#sort_a).
+> **Unsupported sort definitions**: #sort_c = c3(#sort_b).
 
-In these examples, `b2(#sort_a)` is not supported given that its argument is a sort that has at least 1 element that also has arguments. For more detail on the supported notation, see **examples/get-sorts.cpp**.
+In these examples, `c3(#sort_a)` is not supported given that its argument is a sort that has at least 1 element that also has sub-arguments. For more detail on the supported notation, see **examples/get-sorts.cpp**.
 
 ## Dependencies
 
