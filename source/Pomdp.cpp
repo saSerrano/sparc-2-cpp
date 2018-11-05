@@ -722,7 +722,7 @@ bool sp::Pomdp::generatePomdp(std::vector<sp::PState> &S,
 		std::string temp_obs_str("");
 		for(unsigned int j = 0; j <  lits_vec.size(); j++)
 		{
-			if(j > 0) temp_obs_str += "-_-";
+			if(j > 0) temp_obs_str += "-";
 			temp_obs_str += fluent2Cass(lits_vec[j]);
 		}
 
@@ -735,7 +735,7 @@ bool sp::Pomdp::generatePomdp(std::vector<sp::PState> &S,
 
 	//Extract from the statFile the statistic and value specifications for the T, O, and R functions
 	std::tuple<std::vector<int>,std::vector<std::string>> stats;
-	stats = getStats(statFile,action_vec,states_vec,obs_vec);
+	stats = getStats(statFile,form_action_vec,states_vec,obs_vec);
 
 	//Get the last start belief state definition gathered from the statistics file
 	int sbs = -1;
@@ -776,10 +776,53 @@ bool sp::Pomdp::generatePomdp(std::vector<sp::PState> &S,
 			if(i == std::get<0>(stats)[j])
 			{
 				//The matrix is for the T-function
-				if(std::get<1>(stats)[j].substr(0,1) == "T")
+				std::string temp_T = std::get<1>(stats)[j];
+				if(temp_T.substr(0,1) == "T")
 				{
-					//Write the matrix in the POMDP file
-					outf << std::get<1>(stats)[j] << "\n";
+					if(temp_T.find("identity") != -1 || temp_T.find("uniform") != -1)
+					{
+						std::vector<std::string> temp_vec = sp::splitStr(temp_T,"\n");
+						temp_vec = sp::splitStr(temp_vec[0],":");
+						std::string temp_action_str = sp::stripSpaces(temp_vec[1]);
+
+						outf << "T: " + temp_action_str << std::endl;
+						if(temp_T.find("identity") != -1)
+						{
+							for(unsigned int k = 0; k < S.size(); k++)
+							{
+								for(unsigned int l = 0; l < S.size(); l++)
+								{
+									if(l > 0) outf << " ";
+
+									if(k == l) outf << "1";
+									else outf << "0";
+								}
+								outf << std::endl;
+							}
+						}
+						else
+						{
+							double uniform_prob = 1 / static_cast<double>(S.size());
+							for(unsigned int k = 0; k < S.size(); k++)
+							{
+								for(unsigned int l = 0; l < S.size(); l++)
+								{
+									if(l > 0) outf << " ";
+
+									outf << uniform_prob;
+								}
+								outf << std::endl;
+							}
+
+						}
+						outf << std::endl;
+					}
+					else
+					{
+						//Write the matrix in the POMDP file
+						outf << std::get<1>(stats)[j] << "\n";
+					}
+
 					action_from_file = true;
 					break;
 				}
@@ -851,7 +894,21 @@ bool sp::Pomdp::generatePomdp(std::vector<sp::PState> &S,
 		else if(i <= lastKA) 
 		{
 			outf << "T: " + form_action_vec[i] << std::endl;
-			outf << "identity" << std::endl << std::endl;
+
+			//Write the identity matrix explicitly, given that AI-Toolbox does not
+			//support the "uniform" and "identity" keywords
+			for(unsigned int j = 0; j < S.size(); j++)
+			{
+				for(unsigned int k = 0; k < S.size(); k++)
+				{
+					if(k > 0) outf << " ";
+
+					if(j == k) outf << "1";
+					else outf << "0";
+				}
+				outf << std::endl;
+			}
+			outf << std::endl;
 		}
 		//POMDP execution termination actions
 		else 
@@ -874,10 +931,35 @@ bool sp::Pomdp::generatePomdp(std::vector<sp::PState> &S,
 			if(i == std::get<0>(stats)[j])
 			{
 				//The matrix is for the O-function
-				if(std::get<1>(stats)[j].substr(0,1) == "O")
+				std::string temp_O = std::get<1>(stats)[j];
+				if(temp_O.substr(0,1) == "O")
 				{
-					//Write the matrix in the POMDP file
-					outf << std::get<1>(stats)[j] << "\n";
+					if(temp_O.find("uniform") != -1)
+					{
+						std::vector<std::string> temp_vec = sp::splitStr(temp_O,"\n");
+						temp_vec = sp::splitStr(temp_vec[0],":");
+						std::string temp_action_str = sp::stripSpaces(temp_vec[1]);
+
+						outf << "O: " + temp_action_str << std::endl;
+						double uniform_prob = 1 / static_cast<double>(Z.size());
+						for(unsigned int k = 0; k < S.size(); k++)
+						{
+							for(unsigned int l = 0; l < Z.size(); l++)
+							{
+								if(l > 0) outf << " ";
+
+								outf << uniform_prob;
+							}
+							outf << std::endl;
+						}
+						outf << std::endl;
+					}
+					else
+					{
+						//Write the matrix in the POMDP file
+						outf << std::get<1>(stats)[j] << "\n";
+					}
+
 					action_from_file = true;
 					break;
 				}
@@ -1615,6 +1697,120 @@ bool sp::Pomdp::whatStats(std::vector<PState> const &Si,
 	return true;
 }
 
+std::vector<std::vector<std::string>> sp::Pomdp::readSAZ(std::string const &pomdpFile)
+{
+	//Output lists
+	std::vector<std::vector<std::string>> sazLists;
+
+	//Check for a valid file
+	std::ifstream infile;
+	infile.open(pomdpFile,std::ifstream::in);
+	if(!infile.is_open()) return sazLists;
+
+	//Read the file
+	std::string line;
+	std::vector<std::string> lines;
+	while(std::getline(infile,line)) lines.push_back(line);
+	infile.close();
+
+	//Keep those lines that correspond to states, actions and observations
+	std::string read_state("");
+	std::vector<std::string> s_vec;
+	std::vector<std::string> a_vec;
+	std::vector<std::string> z_vec;
+	for(unsigned int i = 0; i < lines.size(); i++)
+	{
+		if(lines[i].find(":") != -1)
+		{
+			//States, actoins, and observations were already read
+			if(!sp::startsWith(lines[i],"states")       &&
+			   !sp::startsWith(lines[i],"actions")      &&
+			   !sp::startsWith(lines[i],"observations") &&
+			   s_vec.size() > 0			    &&
+			   a_vec.size() > 0			    &&
+			   z_vec.size() > 0)
+				break;
+
+			//Determine which list is going to be read
+			if(sp::startsWith(lines[i],"states")) read_state = "states";
+			else if(sp::startsWith(lines[i],"actions")) read_state = "actions";
+			else if(sp::startsWith(lines[i],"observations")) read_state = "observations";
+			else read_state = "";
+		}
+
+		//Keep those lines of interest in their respective vector
+		if(read_state == "states" && lines[i].length() > 0) s_vec.push_back(lines[i]);
+		else if(read_state == "actions" && lines[i].length() > 0) a_vec.push_back(lines[i]);
+		else if(read_state == "observations" && lines[i].length() > 0) z_vec.push_back(lines[i]);
+	}
+
+	//Extract the list of states
+	std::vector<std::string> s_list;
+	for(unsigned int i = 0; i < s_vec.size(); i++)
+	{
+		std::vector<std::string> temp_vec;
+
+		//The line containing the "states:" keyword
+		if(s_vec[i].find(":") != -1)
+		{
+			temp_vec = sp::splitStr(s_vec[i],":");
+			temp_vec = sp::splitStr(temp_vec[1]," ");
+			s_list.insert(s_list.end(),temp_vec.begin(),temp_vec.end());
+		}
+		else
+		{
+			temp_vec = sp::splitStr(s_vec[i]," ");
+			s_list.insert(s_list.end(),temp_vec.begin(),temp_vec.end());
+		}
+	}
+
+	//Extract the list of actions
+	std::vector<std::string> a_list;
+	for(unsigned int i = 0; i < a_vec.size(); i++)
+	{
+		std::vector<std::string> temp_vec;
+
+		//The line containing the "states:" keyword
+		if(a_vec[i].find(":") != -1)
+		{
+			temp_vec = sp::splitStr(a_vec[i],":");
+			temp_vec = sp::splitStr(temp_vec[1]," ");
+			a_list.insert(a_list.end(),temp_vec.begin(),temp_vec.end());
+		}
+		else
+		{
+			temp_vec = sp::splitStr(a_vec[i]," ");
+			a_list.insert(a_list.end(),temp_vec.begin(),temp_vec.end());
+		}
+	}
+
+	//Extract the list of observations
+	std::vector<std::string> z_list;
+	for(unsigned int i = 0; i < z_vec.size(); i++)
+	{
+		std::vector<std::string> temp_vec;
+
+		//The line containing the "states:" keyword
+		if(z_vec[i].find(":") != -1)
+		{
+			temp_vec = sp::splitStr(z_vec[i],":");
+			temp_vec = sp::splitStr(temp_vec[1]," ");
+			z_list.insert(z_list.end(),temp_vec.begin(),temp_vec.end());
+		}
+		else
+		{
+			temp_vec = sp::splitStr(z_vec[i]," ");
+			z_list.insert(z_list.end(),temp_vec.begin(),temp_vec.end());
+		}
+	}
+
+	//Build the final vector of lists
+	sazLists.push_back(s_list);
+	sazLists.push_back(a_list);
+	sazLists.push_back(z_list);
+
+	return sazLists;
+}
 
 
 

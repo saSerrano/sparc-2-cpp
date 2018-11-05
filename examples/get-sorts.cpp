@@ -12,33 +12,8 @@ using namespace sp;
 
 int main(int argc, char** argv)
 {
-vector<PState> vs;
-vector<PState> vz;
-vector<Action> vnka;
-vector<Action> vka;
-vector<Action> vta;
-vector<Transition> tt;
-Pomdp pp;
-
-//Load the transition-diagram from a file
-if(pp.loadTD(vs,vz,vnka,vka,vta,tt,"td.txt"))
-{
-	//Generate the guide-file that says which statistics should
-	//be sampled to create the TD's POMDP
-	pp.whatStats(vs,vz,vnka,vka,tt,"stats-guide.txt");
-	cout << "Guide file created." << endl;
-//	string sparcFile("/home/zero/Dropbox/Tesis/SPARC-Learn/2pomdp/rob-navig-orig.sp");
-//	DomainSort ds;
-//	ds.loadFile(sparcFile);
-//	pp.generatePomdp(vs,vz,vnka,vka,vta,tt,ds,"model.pomdp","");
-}
-
-
-return 0;
-//---------------------------------------------------------------------------------
-
 	//Load the Domain description via a SPARC file
-	string sparcFile("/home/zero/Dropbox/Tesis/SPARC-Learn/2pomdp/rob-navig-orig.sp");
+	string sparcFile("/home/zero/Dropbox/Tesis/SPARC-Learn/2pomdp/full-rob-navig-orig.sp");
 	DomainSort ds;
 	ds.loadFile(sparcFile);
 
@@ -54,37 +29,10 @@ return 0;
 	vector<Action> NKA = ds.generateActions("#nk_a",S);
 	vector<Action> KA = ds.generateActions("#k_a",S);
 
-//cout << "STATES" << endl;
-//for(unsigned int i = 0; i < S.size(); i++) cout << S[i].str() << endl;
-//
-//cout << "OBSERVATIONS" << endl;
-//for(unsigned int i = 0; i < Z.size(); i++) cout << Z[i].str() << endl;
-//
-//cout << "NK - ACTIONS" << endl;
-//for(unsigned int i = 0; i < NKA.size(); i++) cout << NKA[i].str() << endl;
-//
-//cout << "K - ACTIONS" << endl;
-//for(unsigned int i = 0; i < KA.size(); i++) cout << KA[i].str() << endl;
-
 	//Generate the transitions the result from the non-deterministic excution
 	//of actions in i_actions over the states in i_states
 	vector<Transition> T_trans = ds.generateTransitions(S,NKA,"#ink_f");
 	vector<Transition> O_trans = ds.generateTransitions(S,KA,"#ik_f");
-
-//cout << "############################################################" << endl;
-//cout << "T - TRANSITIONS" << endl;
-//for(unsigned int i = 0; i < T_trans.size(); i++)
-//{
-//	T_trans[i].debug();
-//	cout << "------------------------------------------------" << endl;
-//}
-//cout << "############################################################" << endl;
-//cout << "O - TRANSITIONS" << endl;
-//for(unsigned int i = 0; i < O_trans.size(); i++)
-//{
-//	O_trans[i].debug();
-//	cout << "------------------------------------------------" << endl;
-//}
 
 	//Create the execution-terminating actions
 	vector<string> ttt;
@@ -99,7 +47,8 @@ return 0;
 	TO_trans.insert(TO_trans.end(),O_trans.begin(),O_trans.end());
 
 	Pomdp p;
-	p.generatePomdp(S,Z,NKA,KA,termA,TO_trans,ds,"model.pomdp","stats.txt");
+	p.saveTD(S,Z,NKA,KA,termA,TO_trans,"full-rob-navig.td");
+	p.generatePomdp(S,Z,NKA,KA,termA,TO_trans,ds,"full-rob-navig.pomdp","stats.txt");
 
 	return 0;
 }

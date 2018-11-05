@@ -216,6 +216,13 @@ namespace sp
 				       std::vector<Action> const &kA,
 				       std::vector<Transition> &T,
 				       std::string const &guideFile);
+
+			/**
+			 * \brief This method is for obtaining the lists of states, actions and observations, from the POMDP file. This static method is intended to be used when executing the POMDP's policy with AI-Toolbox, due to this library only saves the indexes, and not the names of the elements.
+			 * \param pomdpFile Name of the POMDP file from which the states, actions, and observations are going to be read.
+			 * \return In case "pomdpFile" is a valid file name, the method returns a vector holding 3 vectors, that correspond to the lists of states, actions, and observations, in that order. Otherwise, it returns an empty vector.
+			*/
+			static std::vector<std::vector<std::string>> readSAZ(std::string const &pomdpFile);
 	};
 }
 
